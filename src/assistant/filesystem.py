@@ -11,23 +11,76 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def read_file_tool(request: ToolRequest) -> ToolResult:
-    started_at = utc_now_iso()
+def _invalid_path_result(tool_name: str, started_at: str) -> ToolResult:
+    return ToolResult(
+        ok=False,
+        tool_name=tool_name,
+        execution_id=str(uuid4()),
+        summary="Operation failed: invalid path.",
+        error_code="invalid_path",
+        error_message="Tool argument 'path' must be a non-empty string.",
+        started_at=started_at,
+        finished_at=utc_now_iso(),
+    )
+
+
+def _outside_workspace_result(tool_name: str, path: Path, workspace_root: Path, started_at: str) -> ToolResult:
+    return ToolResult(
+        ok=False,
+        tool_name=tool_name,
+        execution_id=str(uuid4()),
+        summary=f"Operation failed: path is outside workspace: {path}",
+        error_code="path_outside_workspace",
+        error_message=f"Resolved path '{path}' is outside workspace root '{workspace_root}'.",
+        started_at=started_at,
+        finished_at=utc_now_iso(),
+    )
+
+
+def _resolve_workspace_root(value: object) -> Path | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return Path(value).expanduser().resolve()
+
+
+def _resolve_target_path(tool_name: str, request: ToolRequest, started_at: str) -> tuple[Path | None, ToolResult | None]:
     path_value = request.arguments.get("path")
 
     if not isinstance(path_value, str) or not path_value.strip():
-        return ToolResult(
+        return None, _invalid_path_result(tool_name, started_at)
+
+    try:
+        path = Path(path_value).expanduser().resolve(strict=False)
+    except OSError as exc:
+        return None, ToolResult(
             ok=False,
-            tool_name=request.tool_name,
+            tool_name=tool_name,
             execution_id=str(uuid4()),
-            summary="Read failed: invalid path.",
-            error_code="invalid_path",
-            error_message="Tool argument 'path' must be a non-empty string.",
+            summary=f"Operation failed: {exc}",
+            error_code="os_error",
+            error_message=str(exc),
             started_at=started_at,
             finished_at=utc_now_iso(),
         )
 
-    path = Path(path_value).expanduser()
+    workspace_root = _resolve_workspace_root(request.arguments.get("workspace_root"))
+    if workspace_root is not None:
+        try:
+            path.relative_to(workspace_root)
+        except ValueError:
+            return None, _outside_workspace_result(tool_name, path, workspace_root, started_at)
+
+    return path, None
+
+
+def read_file_tool(request: ToolRequest) -> ToolResult:
+    started_at = utc_now_iso()
+    path, error = _resolve_target_path(request.tool_name, request, started_at)
+    if error is not None:
+        return error
+    assert path is not None
 
     if not path.exists():
         return ToolResult(
@@ -87,6 +140,68 @@ def read_file_tool(request: ToolRequest) -> ToolResult:
         data={
             "path": str(path),
             "content": content,
+            "size_bytes": path.stat().st_size,
+        },
+        started_at=started_at,
+        finished_at=utc_now_iso(),
+    )
+
+
+def write_file_tool(request: ToolRequest) -> ToolResult:
+    started_at = utc_now_iso()
+    path, error = _resolve_target_path(request.tool_name, request, started_at)
+    if error is not None:
+        return error
+    assert path is not None
+
+    content_value = request.arguments.get("content")
+    if not isinstance(content_value, str):
+        return ToolResult(
+            ok=False,
+            tool_name=request.tool_name,
+            execution_id=str(uuid4()),
+            summary="Write failed: invalid content.",
+            error_code="invalid_content",
+            error_message="Tool argument 'content' must be a string.",
+            started_at=started_at,
+            finished_at=utc_now_iso(),
+        )
+
+    if path.exists() and not path.is_file():
+        return ToolResult(
+            ok=False,
+            tool_name=request.tool_name,
+            execution_id=str(uuid4()),
+            summary=f"Write failed: not a file: {path}",
+            error_code="not_a_file",
+            error_message=f"Path is not a regular file: {path}",
+            started_at=started_at,
+            finished_at=utc_now_iso(),
+        )
+
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content_value, encoding="utf-8")
+    except OSError as exc:
+        return ToolResult(
+            ok=False,
+            tool_name=request.tool_name,
+            execution_id=str(uuid4()),
+            summary=f"Write failed: {exc}",
+            error_code="os_error",
+            error_message=str(exc),
+            started_at=started_at,
+            finished_at=utc_now_iso(),
+        )
+
+    return ToolResult(
+        ok=True,
+        tool_name=request.tool_name,
+        execution_id=str(uuid4()),
+        summary=f"Wrote {path}",
+        data={
+            "path": str(path),
+            "content": content_value,
             "size_bytes": path.stat().st_size,
         },
         started_at=started_at,
