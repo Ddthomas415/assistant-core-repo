@@ -240,3 +240,39 @@ def test_cli_keyboard_interrupt_exits_cleanly(tmp_path: Path) -> None:
 
     assert result.returncode == 0
     assert "KeyboardInterrupt" not in result.stderr
+
+
+def test_cli_help_includes_core_description() -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "assistant.cli",
+            "--help",
+        ],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert "terminal-first private assistant core" in result.stdout.lower()
+
+
+def test_cli_startup_text_is_friendly(tmp_path: Path) -> None:
+    session_dir = tmp_path / "sessions"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "assistant.cli",
+            "--session-dir",
+            str(session_dir),
+        ],
+        input="exit\n",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert "assistant ready." in result.stdout.lower()

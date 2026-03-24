@@ -8,7 +8,7 @@ from assistant.session import SessionNotFoundError, SessionStore
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Assistant core CLI")
+    parser = argparse.ArgumentParser(description="Terminal-first private assistant core")
     parser.add_argument(
         "--session-dir",
         default=".assistant_sessions",
@@ -36,7 +36,7 @@ def main() -> None:
         try:
             state = store.load(args.resume)
         except SessionNotFoundError as exc:
-            raise SystemExit(str(exc))
+            raise SystemExit(f"Resume failed: {exc}")
     else:
         state = store.create()
 
@@ -47,7 +47,7 @@ def main() -> None:
     print(f"Session: {state.session_id}")
     if args.workspace_root:
         print(f"Workspace root: {args.workspace_root}")
-    print("Type 'exit' or 'quit' to stop.")
+    print("Assistant ready. Type 'exit' or 'quit' to stop.")
 
     while True:
         try:
