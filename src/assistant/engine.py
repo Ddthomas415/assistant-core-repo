@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Callable
 from uuid import uuid4
 
-from .filesystem import read_file_tool
+from .filesystem import read_file_tool, write_file_tool
 from .models import (
     ClarificationTarget,
     EngineResult,
@@ -255,16 +255,58 @@ class Engine:
 
         # 6. Explicit modifying requests -> confirmation.
         if normalized.startswith("overwrite "):
-            path = cleaned_input[len("overwrite ") :].strip()
-            if " with " in path:
-                file_path, content = path.split(" with ", 1)
+            overwrite_body = cleaned_input[len("Overwrite ") :]
+
+            if " with " in overwrite_body:
+                file_path, content = overwrite_body.split(" with ", 1)
             else:
-                file_path, content = path, "updated content"
+                file_path, content = overwrite_body, "updated content"
+
+            file_path = file_path.strip()
+            content = content.strip()
+
+            if not file_path:
+                state.pending_clarification = PendingClarification(
+                    clarification_id=str(uuid4()),
+                    created_at=now,
+                    expires_at=None,
+                    prompt="Which file do you want me to overwrite?",
+                    target=ClarificationTarget.FILE_PATH,
+                    bound_user_request=cleaned_input,
+                    allowed_reply_kinds=["file_path"],
+                )
+                route_decision = RouteDecision(
+                    kind=RouteKind.CLARIFY,
+                    clarification_prompt="Which file do you want me to overwrite?",
+                    clarification_target=ClarificationTarget.FILE_PATH,
+                )
+                policy_outcome = PolicyOutcome(
+                    kind=PolicyOutcomeKind.REQUIRE_CLARIFICATION,
+                    reason="Modifying request is missing a valid target path.",
+                )
+                pending_transition = PendingTransitionKind.CREATED
+                rendered_output = "Which file do you want me to overwrite?"
+                self._append_turn_messages(state, cleaned_input, rendered_output)
+                return EngineResult(
+                    route_decision=route_decision,
+                    policy_outcome=policy_outcome,
+                    rendered_output=rendered_output,
+                    tool_result=None,
+                    trace=TurnTrace(
+                        route_kind=route_decision.kind,
+                        policy_outcome=policy_outcome.kind,
+                        tool_invoked=False,
+                        tool_execution_id=None,
+                        pending_transition=pending_transition,
+                        persistence_event="save_required",
+                        notes=notes,
+                    ),
+                )
 
             requested_action = RequestedAction(
                 action_id=str(uuid4()),
                 tool_name="write_file",
-                arguments={"path": file_path.strip(), "content": content.strip()},
+                arguments={"path": file_path, "content": content},
                 reason="User requested a modifying file write.",
             )
             pending = PendingConfirmation(
@@ -272,7 +314,7 @@ class Engine:
                 action_id=requested_action.action_id,
                 created_at=now,
                 expires_at=None,
-                prompt=f"Please confirm overwriting {file_path.strip()}.",
+                prompt=f"Please confirm overwriting {file_path}.",
                 requested_action=requested_action,
             )
             state.pending_confirmation = pending
@@ -281,7 +323,29 @@ class Engine:
                 tool_request=ToolRequest(
                     tool_name="write_file",
                     arguments=requested_action.arguments,
-                    user_facing_label=f"writing {file_path.strip()}",
+                    user_facing_label=f"writing {file_path}",
+                ),
+            )
+            policy_outcome = PolicyOutcome(
+                kind=PolicyOutcomeKind.REQUIRE_CONFIRMATION,
+                reason="Modifying actions require confirmation.",
+            )
+            pending_transition = PendingTransitionKind.CREATED
+            rendered_output = pending.prompt
+            self._append_turn_messages(state, cleaned_input, rendered_output)
+            return EngineResult(
+                route_decision=route_decision,
+                policy_outcome=policy_outcome,
+                rendered_output=rendered_output,
+                tool_result=None,
+                trace=TurnTrace(
+                    route_kind=route_decision.kind,
+                    policy_outcome=policy_outcome.kind,
+                    tool_invoked=False,
+                    tool_execution_id=None,
+                    pending_transition=pending_transition,
+                    persistence_event="save_required",
+                    notes=notes,
                 ),
             )
             policy_outcome = PolicyOutcome(
@@ -404,6 +468,8 @@ class Engine:
             if self.read_tool is not None:
                 return self.read_tool(tool_request)
             return read_file_tool(tool_request)
-        if tool_request.tool_name == "write_file" and self.write_tool is not None:
-            return self.write_tool(tool_request)
+        if tool_request.tool_name == "write_file":
+            if self.write_tool is not None:
+                return self.write_tool(tool_request)
+            return write_file_tool(tool_request)
         return None

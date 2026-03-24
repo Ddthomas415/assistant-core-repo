@@ -215,3 +215,38 @@ def test_read_tool_missing_file_returns_structured_failure_when_no_injected_hand
     assert result.tool_result.error_code == "file_not_found"
     assert state.last_tool_execution is not None
     assert state.last_tool_execution.ok is False
+
+
+def test_confirmed_write_uses_real_filesystem_tool_when_no_injected_handler(tmp_path) -> None:
+    file_path = tmp_path / "config.yaml"
+
+    engine = Engine()
+    state = make_state()
+
+    result1 = engine.handle_turn(state, f"Overwrite {file_path} with defaults.")
+    assert result1.policy_outcome.kind.value == "require_confirmation"
+    assert state.pending_confirmation is not None
+
+    result2 = engine.handle_turn(state, "yes")
+
+    assert result2.route_decision.kind == RouteKind.CONFIRM
+    assert result2.policy_outcome.kind.value == "allow"
+    assert result2.tool_result is not None
+    assert result2.tool_result.ok is True
+    assert file_path.read_text(encoding="utf-8") == "defaults."
+    assert state.pending_confirmation is None
+    assert state.last_tool_execution is not None
+    assert state.last_tool_execution.tool_name == "write_file"
+
+
+def test_malformed_overwrite_request_requires_clarification() -> None:
+    engine = Engine()
+    state = make_state()
+
+    result = engine.handle_turn(state, "Overwrite  with defaults.")
+
+    assert result.route_decision.kind == RouteKind.CLARIFY
+    assert result.policy_outcome.kind.value == "require_clarification"
+    assert state.pending_clarification is not None
+    assert state.pending_confirmation is None
+    assert "which file" in result.rendered_output.lower()
