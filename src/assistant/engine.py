@@ -52,6 +52,7 @@ class Engine:
 
     read_tool: Callable[[ToolRequest], ToolResult] | None = None
     write_tool: Callable[[ToolRequest], ToolResult] | None = None
+    workspace_root: str | None = None
 
     def handle_turn(self, state: SessionState, user_input: str) -> EngineResult:
         now = utc_now_iso()
@@ -136,9 +137,13 @@ class Engine:
                     reason="Confirmation reply matched pending action.",
                 )
 
+                arguments = dict(pending.requested_action.arguments)
+                if self.workspace_root is not None:
+                    arguments["workspace_root"] = self.workspace_root
+
                 tool_request = ToolRequest(
                     tool_name=pending.requested_action.tool_name,
-                    arguments=pending.requested_action.arguments,
+                    arguments=arguments,
                     user_facing_label=self._tool_label(
                         pending.requested_action.tool_name,
                         pending.requested_action.arguments,
@@ -303,10 +308,14 @@ class Engine:
                     ),
                 )
 
+            action_arguments = {"path": file_path, "content": content}
+            if self.workspace_root is not None:
+                action_arguments["workspace_root"] = self.workspace_root
+
             requested_action = RequestedAction(
                 action_id=str(uuid4()),
                 tool_name="write_file",
-                arguments={"path": file_path, "content": content},
+                arguments=action_arguments,
                 reason="User requested a modifying file write.",
             )
             pending = PendingConfirmation(
@@ -374,11 +383,15 @@ class Engine:
         # 7. Read-only tool path.
         if normalized.startswith("read "):
             file_path = cleaned_input[len("read ") :].strip()
+            arguments = {"path": file_path}
+            if self.workspace_root is not None:
+                arguments["workspace_root"] = self.workspace_root
+
             route_decision = RouteDecision(
                 kind=RouteKind.TOOL,
                 tool_request=ToolRequest(
                     tool_name="read_file",
-                    arguments={"path": file_path},
+                    arguments=arguments,
                     user_facing_label=f"reading {file_path}",
                 ),
             )

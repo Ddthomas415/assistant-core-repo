@@ -52,3 +52,52 @@ def test_read_file_tool_directory_failure(tmp_path: Path) -> None:
     assert result.ok is False
     assert result.error_code == "not_a_file"
     assert "not a file" in result.summary.lower()
+
+
+def test_write_file_tool_success(tmp_path: Path) -> None:
+    file_path = tmp_path / "write-example.txt"
+
+    request = ToolRequest(
+        tool_name="write_file",
+        arguments={"path": str(file_path), "content": "written content"},
+        user_facing_label=f"writing {file_path}",
+    )
+
+    from assistant.filesystem import write_file_tool
+
+    result = write_file_tool(request)
+
+    assert result.ok is True
+    assert result.error_code is None
+    assert file_path.read_text(encoding="utf-8") == "written content"
+    assert result.data["content"] == "written content"
+
+
+def test_write_file_tool_invalid_path_failure() -> None:
+    request = ToolRequest(
+        tool_name="write_file",
+        arguments={"path": "", "content": "written content"},
+        user_facing_label="writing invalid path",
+    )
+
+    from assistant.filesystem import write_file_tool
+
+    result = write_file_tool(request)
+
+    assert result.ok is False
+    assert result.error_code == "invalid_path"
+
+
+def test_write_file_tool_directory_failure(tmp_path: Path) -> None:
+    request = ToolRequest(
+        tool_name="write_file",
+        arguments={"path": str(tmp_path), "content": "written content"},
+        user_facing_label=f"writing {tmp_path}",
+    )
+
+    from assistant.filesystem import write_file_tool
+
+    result = write_file_tool(request)
+
+    assert result.ok is False
+    assert result.error_code == "not_a_file"

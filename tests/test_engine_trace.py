@@ -120,3 +120,32 @@ def test_real_read_tool_failure_sets_trace_execution_fields() -> None:
     assert result.tool_result.ok is False
     assert result.trace.tool_invoked is True
     assert result.trace.tool_execution_id == result.tool_result.execution_id
+
+
+def test_stale_confirmation_does_not_mutate_filesystem(tmp_path) -> None:
+    engine = Engine()
+    state = make_state()
+
+    file_path = tmp_path / "config.yaml"
+    file_path.write_text("original", encoding="utf-8")
+
+    requested_action = RequestedAction(
+        action_id=str(uuid4()),
+        tool_name="write_file",
+        arguments={"path": str(file_path), "content": "mutated"},
+        reason="test",
+    )
+    state.pending_confirmation = PendingConfirmation(
+        confirmation_id=str(uuid4()),
+        action_id=requested_action.action_id,
+        created_at=now_iso(),
+        expires_at=expired_iso(),
+        prompt="Please confirm.",
+        requested_action=requested_action,
+    )
+
+    result = engine.handle_turn(state, "yes")
+
+    assert result.route_decision.kind == RouteKind.CONFIRM
+    assert result.policy_outcome.kind.value == "block"
+    assert file_path.read_text(encoding="utf-8") == "original"

@@ -250,3 +250,41 @@ def test_malformed_overwrite_request_requires_clarification() -> None:
     assert state.pending_clarification is not None
     assert state.pending_confirmation is None
     assert "which file" in result.rendered_output.lower()
+
+
+def test_engine_read_blocks_path_outside_workspace(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    outside = tmp_path / "outside.txt"
+    outside.write_text("secret", encoding="utf-8")
+
+    engine = Engine(workspace_root=str(workspace))
+    state = make_state()
+
+    result = engine.handle_turn(state, f"Read {outside}")
+
+    assert result.route_decision.kind == RouteKind.TOOL
+    assert result.tool_result is not None
+    assert result.tool_result.ok is False
+    assert result.tool_result.error_code == "path_outside_workspace"
+
+
+def test_engine_confirmed_write_blocks_path_outside_workspace(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    outside = tmp_path / "outside.txt"
+
+    engine = Engine(workspace_root=str(workspace))
+    state = make_state()
+
+    result1 = engine.handle_turn(state, f"Overwrite {outside} with secret")
+    assert result1.policy_outcome.kind.value == "require_confirmation"
+
+    result2 = engine.handle_turn(state, "yes")
+
+    assert result2.route_decision.kind == RouteKind.CONFIRM
+    assert result2.tool_result is not None
+    assert result2.tool_result.ok is False
+    assert result2.tool_result.error_code == "path_outside_workspace"
