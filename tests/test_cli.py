@@ -164,3 +164,59 @@ def test_cli_read_outside_workspace_fails_cleanly(tmp_path: Path) -> None:
     )
 
     assert "outside workspace" in result.stdout.lower()
+
+
+def test_cli_confirmed_write_inside_workspace_succeeds(tmp_path: Path) -> None:
+    session_dir = tmp_path / "sessions"
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+
+    target = workspace_root / "notes.txt"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "assistant.cli",
+            "--session-dir",
+            str(session_dir),
+            "--workspace-root",
+            str(workspace_root),
+        ],
+        input=f"Overwrite {target} with hello world\nyes\nexit\n",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert "please confirm overwriting" in result.stdout.lower()
+    assert "wrote" in result.stdout.lower()
+    assert target.read_text(encoding="utf-8") == "hello world"
+
+
+def test_cli_confirmed_write_outside_workspace_fails_cleanly(tmp_path: Path) -> None:
+    session_dir = tmp_path / "sessions"
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+
+    outside = tmp_path / "outside.txt"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "assistant.cli",
+            "--session-dir",
+            str(session_dir),
+            "--workspace-root",
+            str(workspace_root),
+        ],
+        input=f"Overwrite {outside} with secret\nyes\nexit\n",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert "please confirm overwriting" in result.stdout.lower()
+    assert "outside workspace" in result.stdout.lower()
+    assert not outside.exists()
