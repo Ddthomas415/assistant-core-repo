@@ -220,3 +220,23 @@ def test_cli_confirmed_write_outside_workspace_fails_cleanly(tmp_path: Path) -> 
     assert "please confirm overwriting" in result.stdout.lower()
     assert "outside workspace" in result.stdout.lower()
     assert not outside.exists()
+
+
+def test_cli_keyboard_interrupt_exits_cleanly(tmp_path: Path) -> None:
+    session_dir = tmp_path / "sessions"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "assistant.cli",
+            "--session-dir",
+            str(session_dir),
+        ],
+        input="\x03",
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode == 0
+    assert "KeyboardInterrupt" not in result.stderr

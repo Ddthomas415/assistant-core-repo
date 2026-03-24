@@ -55,6 +55,9 @@ def main() -> None:
         except EOFError:
             print()
             break
+        except KeyboardInterrupt:
+            print()
+            break
 
         if user_input.strip().lower() in {"exit", "quit"}:
             break
