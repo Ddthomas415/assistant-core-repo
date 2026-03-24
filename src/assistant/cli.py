@@ -42,6 +42,8 @@ def main() -> None:
 
     engine = Engine(workspace_root=args.workspace_root)
 
+    store.save(state)
+
     print(f"Session: {state.session_id}")
     if args.workspace_root:
         print(f"Workspace root: {args.workspace_root}")
