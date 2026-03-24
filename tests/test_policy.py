@@ -91,3 +91,16 @@ def test_is_clarification_expired_detects_expired_pending_clarification() -> Non
     )
 
     assert is_clarification_expired(state, now_iso()) is True
+
+def test_satisfies_clarification_rejects_unrelated_question_for_file_path() -> None:
+    pending = PendingClarification(
+        clarification_id=str(uuid4()),
+        created_at=now_iso(),
+        expires_at=None,
+        prompt="Which config file?",
+        target=ClarificationTarget.FILE_PATH,
+        bound_user_request="Open the config file.",
+        allowed_reply_kinds=["file_path"],
+    )
+
+    assert satisfies_clarification(pending, "What does this assistant do?") is False
