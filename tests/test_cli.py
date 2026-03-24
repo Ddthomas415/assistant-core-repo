@@ -276,3 +276,79 @@ def test_cli_startup_text_is_friendly(tmp_path: Path) -> None:
     )
 
     assert "assistant ready." in result.stdout.lower()
+
+
+def test_cli_read_emits_visible_tool_signal(tmp_path: Path) -> None:
+    session_dir = tmp_path / "sessions"
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+
+    target = workspace_root / "notes.txt"
+    target.write_text("hello signal", encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "assistant.cli",
+            "--session-dir",
+            str(session_dir),
+            "--workspace-root",
+            str(workspace_root),
+        ],
+        input=f"Read {target}\nexit\n",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert "[reading " in result.stdout.lower()
+
+
+def test_cli_confirmed_write_emits_visible_tool_signal(tmp_path: Path) -> None:
+    session_dir = tmp_path / "sessions"
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+
+    target = workspace_root / "write-signal.txt"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "assistant.cli",
+            "--session-dir",
+            str(session_dir),
+            "--workspace-root",
+            str(workspace_root),
+        ],
+        input=f"Overwrite {target} with hello\nyes\nexit\n",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert "please confirm overwriting" in result.stdout.lower()
+    assert "[writing " in result.stdout.lower()
+
+
+def test_cli_direct_answer_does_not_emit_tool_signal(tmp_path: Path) -> None:
+    session_dir = tmp_path / "sessions"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "assistant.cli",
+            "--session-dir",
+            str(session_dir),
+        ],
+        input="What does this assistant do?\nexit\n",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    stdout = result.stdout.lower()
+    assert "[reading " not in stdout
+    assert "[writing " not in stdout
