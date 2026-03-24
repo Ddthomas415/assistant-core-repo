@@ -24,6 +24,12 @@ from .models import (
     ToolResult,
     TurnTrace,
 )
+from .policy import (
+    is_clarification_expired,
+    is_confirmation_expired,
+    is_confirmation_reply,
+    satisfies_clarification,
+)
 
 
 def utc_now_iso() -> str:
@@ -58,19 +64,19 @@ class Engine:
         tool_result: ToolResult | None = None
 
         # 1. Expire stale pending state first.
-        if self._is_confirmation_expired(state, now):
+        if is_confirmation_expired(state, now):
             state.pending_confirmation = None
             pending_transition = PendingTransitionKind.EXPIRED
             notes.append("expired_pending_confirmation_cleared")
 
-        if self._is_clarification_expired(state, now):
+        if is_clarification_expired(state, now):
             state.pending_clarification = None
             pending_transition = PendingTransitionKind.EXPIRED
             notes.append("expired_pending_clarification_cleared")
 
         # 2. Resolve valid pending clarification if the user reply satisfies it.
         if state.pending_clarification is not None:
-            if self._satisfies_clarification(state.pending_clarification, cleaned_input):
+            if satisfies_clarification(state.pending_clarification, cleaned_input):
                 resolved = state.pending_clarification
                 state.pending_clarification = None
                 pending_transition = PendingTransitionKind.RESOLVED
@@ -113,7 +119,7 @@ class Engine:
 
         # 3. Resolve valid pending confirmation if the user reply is a confirmation.
         if state.pending_confirmation is not None:
-            if self._is_confirmation_reply(cleaned_input):
+            if is_confirmation_reply(cleaned_input):
                 pending = state.pending_confirmation
                 state.pending_confirmation = None
                 pending_transition = PendingTransitionKind.RESOLVED
@@ -175,7 +181,7 @@ class Engine:
                 notes.append("pending_confirmation_superseded")
 
         # 4. Stale yes/confirm with no valid pending confirmation.
-        if self._is_confirmation_reply(cleaned_input):
+        if is_confirmation_reply(cleaned_input):
             route_decision = RouteDecision(
                 kind=RouteKind.CONFIRM,
                 confirmation_prompt="No valid pending confirmation.",
@@ -383,30 +389,6 @@ class Engine:
                 "use workspace tools when needed, clarify ambiguity, and confirm modifying actions."
             )
         return "I understood your request, but this minimal engine only supports the core trusted-turn flows."
-
-    def _is_confirmation_reply(self, user_input: str) -> bool:
-        return user_input.strip().lower() in {"yes", "y", "confirm"}
-
-    def _satisfies_clarification(
-        self, pending: PendingClarification, user_input: str
-    ) -> bool:
-        if not user_input.strip():
-            return False
-        if self._is_confirmation_reply(user_input):
-            return False
-        return True
-
-    def _is_confirmation_expired(self, state: SessionState, now: str) -> bool:
-        pending = state.pending_confirmation
-        if pending is None or pending.expires_at is None:
-            return False
-        return pending.expires_at < now
-
-    def _is_clarification_expired(self, state: SessionState, now: str) -> bool:
-        pending = state.pending_clarification
-        if pending is None or pending.expires_at is None:
-            return False
-        return pending.expires_at < now
 
     def _tool_label(self, tool_name: str, arguments: dict[str, str]) -> str:
         path = arguments.get("path", "")
