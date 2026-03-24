@@ -181,3 +181,37 @@ def test_read_tool_path_is_allowed_and_records_last_execution() -> None:
     assert result.tool_result.tool_name == "read_file"
     assert state.last_tool_execution is not None
     assert "read pyproject.toml" in result.rendered_output.lower()
+
+
+def test_read_tool_uses_real_filesystem_tool_when_no_injected_handler(tmp_path) -> None:
+    file_path = tmp_path / "notes.txt"
+    file_path.write_text("alpha beta", encoding="utf-8")
+
+    engine = Engine()
+    state = make_state()
+
+    result = engine.handle_turn(state, f"Read {file_path}")
+
+    assert result.route_decision.kind == RouteKind.TOOL
+    assert result.policy_outcome.kind.value == "allow"
+    assert result.tool_result is not None
+    assert result.tool_result.ok is True
+    assert result.tool_result.tool_name == "read_file"
+    assert result.tool_result.data["content"] == "alpha beta"
+    assert state.last_tool_execution is not None
+
+
+def test_read_tool_missing_file_returns_structured_failure_when_no_injected_handler(tmp_path) -> None:
+    file_path = tmp_path / "missing.txt"
+
+    engine = Engine()
+    state = make_state()
+
+    result = engine.handle_turn(state, f"Read {file_path}")
+
+    assert result.route_decision.kind == RouteKind.TOOL
+    assert result.tool_result is not None
+    assert result.tool_result.ok is False
+    assert result.tool_result.error_code == "file_not_found"
+    assert state.last_tool_execution is not None
+    assert state.last_tool_execution.ok is False

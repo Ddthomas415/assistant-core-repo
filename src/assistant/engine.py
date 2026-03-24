@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Callable
 from uuid import uuid4
 
+from .filesystem import read_file_tool
 from .models import (
     ClarificationTarget,
     EngineResult,
@@ -399,8 +400,10 @@ class Engine:
         return f"running {tool_name}"
 
     def _execute_tool(self, tool_request: ToolRequest) -> ToolResult | None:
-        if tool_request.tool_name == "read_file" and self.read_tool is not None:
-            return self.read_tool(tool_request)
+        if tool_request.tool_name == "read_file":
+            if self.read_tool is not None:
+                return self.read_tool(tool_request)
+            return read_file_tool(tool_request)
         if tool_request.tool_name == "write_file" and self.write_tool is not None:
             return self.write_tool(tool_request)
         return None
