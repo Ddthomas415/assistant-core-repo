@@ -45,3 +45,68 @@ def test_cli_resume_missing_session_fails_cleanly(tmp_path: Path) -> None:
 
     assert result.returncode != 0
     assert "missing-session-id" in result.stderr or "missing-session-id" in result.stdout
+
+
+def test_cli_resume_existing_session_loads_same_session_id(tmp_path: Path) -> None:
+    session_dir = tmp_path / "sessions"
+
+    first = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "assistant.cli",
+            "--session-dir",
+            str(session_dir),
+        ],
+        input="exit\n",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    session_line = next(
+        line for line in first.stdout.splitlines() if line.startswith("Session:")
+    )
+    session_id = session_line.split("Session:", 1)[1].strip()
+
+    second = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "assistant.cli",
+            "--session-dir",
+            str(session_dir),
+            "--resume",
+            session_id,
+        ],
+        input="exit\n",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert f"Session: {session_id}" in second.stdout
+
+
+def test_cli_prints_workspace_root_when_provided(tmp_path: Path) -> None:
+    session_dir = tmp_path / "sessions"
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "assistant.cli",
+            "--session-dir",
+            str(session_dir),
+            "--workspace-root",
+            str(workspace_root),
+        ],
+        input="exit\n",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert f"Workspace root: {workspace_root}" in result.stdout
