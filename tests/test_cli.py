@@ -137,3 +137,30 @@ def test_cli_read_outside_workspace_fails_cleanly(tmp_path: Path) -> None:
     )
 
     assert "outside workspace" in result.stdout.lower()
+
+
+def test_cli_read_outside_workspace_fails_cleanly(tmp_path: Path) -> None:
+    session_dir = tmp_path / "sessions"
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+
+    outside = tmp_path / "outside.txt"
+    outside.write_text("secret", encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "assistant.cli",
+            "--session-dir",
+            str(session_dir),
+            "--workspace-root",
+            str(workspace_root),
+        ],
+        input=f"Read {outside}\nexit\n",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert "outside workspace" in result.stdout.lower()
