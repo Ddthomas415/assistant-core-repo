@@ -28,3 +28,19 @@ Resolved on `feature/tool-list-workspace`:
 Still review separately:
 - #1 what is todays date ?
 - #2 what is the core truste ?
+
+## Step 4 Conclusion
+
+High-impact failures from Session 1 are resolved on `feature/tool-list-workspace`:
+- #3 what files are in my workspace
+- #4 show me the contents of notes.txt
+- #5 can you list everything in the workspace folder
+- #7 make a file called test.py that prints hello
+
+Remaining items:
+- #1 "what is todays date ?" is outside the current repo scope and will not be added to the engine
+- #2 "what is the core truste ?" is low-impact wording noise and not worth feature work
+
+Decision:
+- Heuristic routing is sufficient for the current workflow
+- No LLM-router work is justified from this session
