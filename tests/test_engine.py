@@ -288,3 +288,114 @@ def test_engine_confirmed_write_blocks_path_outside_workspace(tmp_path) -> None:
     assert result2.tool_result is not None
     assert result2.tool_result.ok is False
     assert result2.tool_result.error_code == "path_outside_workspace"
+
+
+# --- Tests proving the two engine.py correctness fixes ---
+
+
+def test_overwrite_parser_preserves_path_case(tmp_path) -> None:
+    """The overwrite body must be sliced from cleaned_input, not from normalized.
+    Slicing normalized would lowercase the file path and content, silently
+    writing to the wrong path on case-sensitive filesystems."""
+    # Use a path with mixed case to make case-preservation observable
+    mixed_case_dir = tmp_path / "MyProject"
+    mixed_case_dir.mkdir()
+    file_path = mixed_case_dir / "Config.YAML"
+
+    engine = Engine(write_tool=fake_write_tool)
+    state = make_state()
+
+    engine.handle_turn(state, f"overwrite {file_path} with updated")
+
+    assert state.pending_confirmation is not None
+    parsed_path = state.pending_confirmation.requested_action.arguments["path"]
+    # Must preserve original case — NOT be lowercased
+    assert parsed_path == str(file_path), (
+        f"Path case not preserved. Expected {str(file_path)!r}, got {parsed_path!r}"
+    )
+
+
+def test_overwrite_parser_preserves_content_case(tmp_path) -> None:
+    """Content after 'with' must preserve original case — not be lowercased."""
+    file_path = tmp_path / "notes.txt"
+
+    engine = Engine(write_tool=fake_write_tool)
+    state = make_state()
+
+    engine.handle_turn(state, f"overwrite {file_path} with Hello World")
+
+    assert state.pending_confirmation is not None
+    parsed_content = state.pending_confirmation.requested_action.arguments["content"]
+    # Content must preserve original casing from cleaned_input, not be lowercased
+    assert parsed_content == "Hello World", (
+        f"Content case not preserved. Expected 'Hello World', got {parsed_content!r}"
+    )
+
+
+def test_overwrite_uppercase_trigger_parses_body_correctly(tmp_path) -> None:
+    """Uppercase OVERWRITE trigger must route to confirmation and parse
+    path and content correctly — not produce garbled output."""
+    file_path = tmp_path / "output.txt"
+
+    engine = Engine()
+    state = make_state()
+
+    engine.handle_turn(state, f"OVERWRITE {file_path} with correct content")
+
+    assert state.pending_confirmation is not None, (
+        "OVERWRITE (uppercase) should create pending confirmation"
+    )
+    args = state.pending_confirmation.requested_action.arguments
+    assert args["path"] == str(file_path), (
+        f"Path mismatch. Expected {str(file_path)!r}, got {args['path']!r}"
+    )
+    assert args["content"] == "correct content", (
+        f"Content mismatch. Expected 'correct content', got {args['content']!r}"
+    )
+
+
+def test_overwrite_end_to_end_writes_correct_content(tmp_path) -> None:
+    """Full round-trip: parse body, confirm, execute, verify file on disk."""
+    file_path = tmp_path / "result.txt"
+
+    engine = Engine()
+    state = make_state()
+
+    engine.handle_turn(state, f"overwrite {file_path} with exact content")
+    assert state.pending_confirmation is not None
+
+    result2 = engine.handle_turn(state, "yes")
+    assert result2.route_decision.kind == RouteKind.CONFIRM
+    assert result2.policy_outcome.kind.value == "allow"
+    assert result2.tool_result is not None
+    assert result2.tool_result.ok is True
+
+    on_disk = file_path.read_text(encoding="utf-8")
+    assert on_disk == "exact content", (
+        f"File content mismatch. Expected 'exact content', got {on_disk!r}"
+    )
+
+
+def test_engine_routes_workspace_listing_phrase() -> None:
+    engine = Engine()
+    state = make_state()
+    result = engine.handle_turn(state, "what files are in my workspace")
+    assert result.route_decision.kind == RouteKind.TOOL
+    assert result.route_decision.tool_request is not None
+    assert result.route_decision.tool_request.tool_name == "list_workspace"
+
+def test_engine_routes_show_me_contents_phrase() -> None:
+    engine = Engine()
+    state = make_state()
+    result = engine.handle_turn(state, "show me the contents of notes.txt")
+    assert result.route_decision.kind == RouteKind.TOOL
+    assert result.route_decision.tool_request is not None
+    assert result.route_decision.tool_request.tool_name == "read_file"
+
+def test_engine_routes_make_file_phrase() -> None:
+    engine = Engine()
+    state = make_state()
+    result = engine.handle_turn(state, "make a file called test.py that prints hello")
+    assert result.route_decision.kind == RouteKind.TOOL
+    assert result.route_decision.tool_request is not None
+    assert result.route_decision.tool_request.tool_name == "write_file"

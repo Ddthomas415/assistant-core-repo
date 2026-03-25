@@ -207,3 +207,61 @@ def write_file_tool(request: ToolRequest) -> ToolResult:
         started_at=started_at,
         finished_at=utc_now_iso(),
     )
+
+def list_workspace_tool(request: ToolRequest) -> ToolResult:
+    started_at = utc_now_iso()
+
+    workspace_root = _resolve_workspace_root(request.arguments.get("workspace_root"))
+    if workspace_root is None:
+        return ToolResult(
+            ok=False,
+            tool_name=request.tool_name,
+            execution_id=str(uuid4()),
+            summary="List failed: no workspace root configured.",
+            error_code="no_workspace_root",
+            error_message="workspace_root argument is required for list_workspace.",
+            started_at=started_at,
+            finished_at=utc_now_iso(),
+        )
+
+    if not workspace_root.exists():
+        return ToolResult(
+            ok=False,
+            tool_name=request.tool_name,
+            execution_id=str(uuid4()),
+            summary=f"List failed: workspace not found: {workspace_root}",
+            error_code="workspace_not_found",
+            error_message=f"Workspace root does not exist: {workspace_root}",
+            started_at=started_at,
+            finished_at=utc_now_iso(),
+        )
+
+    try:
+        files = sorted(
+            str(p.relative_to(workspace_root))
+            for p in workspace_root.rglob("*")
+            if p.is_file()
+        )
+    except OSError as exc:
+        return ToolResult(
+            ok=False,
+            tool_name=request.tool_name,
+            execution_id=str(uuid4()),
+            summary=f"List failed: {exc}",
+            error_code="os_error",
+            error_message=str(exc),
+            started_at=started_at,
+            finished_at=utc_now_iso(),
+        )
+
+    summary = f"Workspace: {workspace_root}\n" + ("\n".join(files) if files else "(empty)")
+    return ToolResult(
+        ok=True,
+        tool_name=request.tool_name,
+        execution_id=str(uuid4()),
+        summary=summary,
+        data={"workspace_root": str(workspace_root), "files": files},
+        started_at=started_at,
+        finished_at=utc_now_iso(),
+    )
+
