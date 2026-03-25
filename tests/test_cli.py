@@ -139,33 +139,6 @@ def test_cli_read_outside_workspace_fails_cleanly(tmp_path: Path) -> None:
     assert "outside workspace" in result.stdout.lower()
 
 
-def test_cli_read_outside_workspace_fails_cleanly(tmp_path: Path) -> None:
-    session_dir = tmp_path / "sessions"
-    workspace_root = tmp_path / "workspace"
-    workspace_root.mkdir()
-
-    outside = tmp_path / "outside.txt"
-    outside.write_text("secret", encoding="utf-8")
-
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "assistant.cli",
-            "--session-dir",
-            str(session_dir),
-            "--workspace-root",
-            str(workspace_root),
-        ],
-        input=f"Read {outside}\nexit\n",
-        text=True,
-        capture_output=True,
-        check=True,
-    )
-
-    assert "outside workspace" in result.stdout.lower()
-
-
 def test_cli_confirmed_write_inside_workspace_succeeds(tmp_path: Path) -> None:
     session_dir = tmp_path / "sessions"
     workspace_root = tmp_path / "workspace"
@@ -352,3 +325,33 @@ def test_cli_direct_answer_does_not_emit_tool_signal(tmp_path: Path) -> None:
     stdout = result.stdout.lower()
     assert "[reading " not in stdout
     assert "[writing " not in stdout
+
+def test_cli_workspace_listing_phrase_succeeds(tmp_path: Path) -> None:
+    session_dir = tmp_path / "sessions"
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    (workspace_root / "a.txt").write_text("a", encoding="utf-8")
+    sub = workspace_root / "sub"
+    sub.mkdir()
+    (sub / "b.txt").write_text("b", encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "assistant.cli",
+            "--session-dir",
+            str(session_dir),
+            "--workspace-root",
+            str(workspace_root),
+        ],
+        input="what files are in my workspace\nexit\n",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    stdout = result.stdout.lower()
+    assert "[listing workspace...]" in stdout
+    assert "a.txt" in stdout
+    assert "sub/b.txt" in stdout

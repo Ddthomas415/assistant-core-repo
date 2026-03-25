@@ -260,7 +260,7 @@ class Engine:
 
         # 6. Explicit modifying requests -> confirmation.
         if normalized.startswith("overwrite "):
-            overwrite_body = cleaned_input[len("Overwrite ") :]
+            overwrite_body = cleaned_input[len("overwrite "):]
 
             if " with " in overwrite_body:
                 file_path, content = overwrite_body.split(" with ", 1)
@@ -357,23 +357,52 @@ class Engine:
                     notes=notes,
                 ),
             )
-            policy_outcome = PolicyOutcome(
-                kind=PolicyOutcomeKind.REQUIRE_CONFIRMATION,
-                reason="Modifying actions require confirmation.",
+
+        if normalized in {
+            "what files are in my workspace",
+            "show me my workspace files",
+            "can you list everything in the workspace folder",
+        }:
+            arguments = {}
+            if self.workspace_root is not None:
+                arguments["workspace_root"] = self.workspace_root
+
+            route_decision = RouteDecision(
+                kind=RouteKind.TOOL,
+                tool_request=ToolRequest(
+                    tool_name="list_workspace",
+                    arguments=arguments,
+                    user_facing_label="listing workspace",
+                ),
             )
-            pending_transition = PendingTransitionKind.CREATED
-            rendered_output = pending.prompt
+            policy_outcome = PolicyOutcome(
+                kind=PolicyOutcomeKind.ALLOW,
+                reason="Workspace listing is allowed.",
+            )
+            tool_result = self._execute_tool(route_decision.tool_request)
+            if tool_result is not None:
+                state.last_tool_execution = LastToolExecution(
+                    execution_id=tool_result.execution_id,
+                    tool_name=tool_result.tool_name,
+                    ok=tool_result.ok,
+                    summary=tool_result.summary,
+                    finished_at=tool_result.finished_at,
+                )
+                rendered_output = f"[{route_decision.tool_request.user_facing_label}...]\n{tool_result.summary}"
+            else:
+                rendered_output = "Workspace listing requested, but no tool handler is configured."
+
             self._append_turn_messages(state, cleaned_input, rendered_output)
             return EngineResult(
                 route_decision=route_decision,
                 policy_outcome=policy_outcome,
                 rendered_output=rendered_output,
-                tool_result=None,
+                tool_result=tool_result,
                 trace=TurnTrace(
                     route_kind=route_decision.kind,
                     policy_outcome=policy_outcome.kind,
-                    tool_invoked=False,
-                    tool_execution_id=None,
+                    tool_invoked=tool_result is not None,
+                    tool_execution_id=tool_result.execution_id if tool_result else None,
                     pending_transition=pending_transition,
                     persistence_event="save_required",
                     notes=notes,
@@ -485,4 +514,7 @@ class Engine:
             if self.write_tool is not None:
                 return self.write_tool(tool_request)
             return write_file_tool(tool_request)
+        if tool_request.tool_name == "list_workspace":
+            from .filesystem import list_workspace_tool
+            return list_workspace_tool(tool_request)
         return None
