@@ -383,3 +383,19 @@ def test_engine_routes_workspace_listing_phrase() -> None:
     assert result.route_decision.kind == RouteKind.TOOL
     assert result.route_decision.tool_request is not None
     assert result.route_decision.tool_request.tool_name == "list_workspace"
+
+def test_engine_routes_show_me_contents_phrase() -> None:
+    engine = Engine()
+    state = make_state()
+    result = engine.handle_turn(state, "show me the contents of notes.txt")
+    assert result.route_decision.kind == RouteKind.TOOL
+    assert result.route_decision.tool_request is not None
+    assert result.route_decision.tool_request.tool_name == "read_file"
+
+def test_engine_routes_make_file_phrase() -> None:
+    engine = Engine()
+    state = make_state()
+    result = engine.handle_turn(state, "make a file called test.py that prints hello")
+    assert result.route_decision.kind == RouteKind.TOOL
+    assert result.route_decision.tool_request is not None
+    assert result.route_decision.tool_request.tool_name == "write_file"
