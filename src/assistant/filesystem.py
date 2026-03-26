@@ -6,6 +6,9 @@ from uuid import uuid4
 
 from assistant.models import ToolRequest, ToolResult
 
+MAX_READ_BYTES = 1024 * 1024
+MAX_WORKSPACE_FILES = 200
+
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -112,6 +115,19 @@ def read_file_tool(request: ToolRequest) -> ToolResult:
         )
 
     try:
+        size_bytes = path.stat().st_size
+        if size_bytes > MAX_READ_BYTES:
+            return ToolResult(
+                ok=False,
+                tool_name=request.tool_name,
+                execution_id=str(uuid4()),
+                summary=f"Read failed: file too large: {path}",
+                error_code="file_too_large",
+                error_message=f"File exceeds max read size of {MAX_READ_BYTES} bytes: {path}",
+                started_at=started_at,
+                finished_at=utc_now_iso(),
+            )
+
         content = path.read_text(encoding="utf-8")
     except UnicodeDecodeError:
         return ToolResult(
@@ -242,11 +258,15 @@ def list_workspace_tool(request: ToolRequest) -> ToolResult:
         )
 
     try:
-        files = sorted(
-            str(p.relative_to(workspace_root))
-            for p in workspace_root.rglob("*")
-            if p.is_file()
-        )
+        files = []
+        truncated = False
+        for p in sorted(workspace_root.rglob("*")):
+            if not p.is_file():
+                continue
+            files.append(str(p.relative_to(workspace_root)))
+            if len(files) >= MAX_WORKSPACE_FILES:
+                truncated = True
+                break
     except OSError as exc:
         return ToolResult(
             ok=False,
@@ -259,13 +279,16 @@ def list_workspace_tool(request: ToolRequest) -> ToolResult:
             finished_at=utc_now_iso(),
         )
 
-    summary = f"Workspace: {workspace_root}\n" + ("\n".join(files) if files else "(empty)")
+    listing = "\n".join(files) if files else "(empty)"
+    if truncated:
+        listing += f"\n... [truncated at {MAX_WORKSPACE_FILES} files]"
+    summary = f"Workspace: {workspace_root}\n" + listing
     return ToolResult(
         ok=True,
         tool_name=request.tool_name,
         execution_id=str(uuid4()),
         summary=summary,
-        data={"workspace_root": str(workspace_root), "files": files},
+        data={"workspace_root": str(workspace_root), "files": files, "truncated": truncated},
         started_at=started_at,
         finished_at=utc_now_iso(),
     )
