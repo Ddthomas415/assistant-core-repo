@@ -56,3 +56,17 @@ Tasks intended: validate clarification follow-through and workspace-bound behavi
 | 4 | "make a file called test.py that prints hello" → "yes" | "Operation failed: path is outside workspace: /Users/baitus/assistant-core-repo/test.py" | write should resolve target inside configured workspace | routing-miss | high |
 | 5 | "open the config file" (after failed sequence) | "I understood your request, but this minimal engine only supports the core trusted-turn flows." | should clarify consistently | routing-miss | medium |
 
+
+## Session 2 — update after fix validation
+
+Resolved:
+- clarified write flow now preserves filename and writes inside workspace
+- workspace listing works
+- make-file flow works
+
+Not a regression:
+- reading config.yaml failed because the file does not exist in ./workspace
+- reading notes.txt failed because the file does not exist in ./workspace
+
+Still open:
+- repeating "open the config file" after the prior sequence falls back to the default answer instead of clarifying again
