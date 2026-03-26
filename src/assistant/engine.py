@@ -46,8 +46,8 @@ class Engine:
     - direct answers
     - clarification for ambiguous file/action requests
     - confirmation for modifying actions
-    - one fake read tool
-    - one fake write tool
+    - one read filesystem tool
+    - one write filesystem tool
     """
 
     read_tool: Callable[[ToolRequest], ToolResult] | None = None
@@ -83,6 +83,17 @@ class Engine:
                 state.pending_clarification = None
                 pending_transition = PendingTransitionKind.RESOLVED
                 notes.append("pending_clarification_resolved")
+
+                continued_input = self._reconstruct_clarified_request(resolved, cleaned_input)
+                if continued_input is not None:
+                    return self._handle_routed_input(
+                        state=state,
+                        route_input=continued_input,
+                        now=now,
+                        pending_transition=pending_transition,
+                        notes=notes,
+                        message_input=cleaned_input,
+                    )
 
                 rendered_output = (
                     f"Thanks. I’ll use '{cleaned_input}' as the {resolved.target.value.replace('_', ' ')}."
@@ -213,8 +224,33 @@ class Engine:
                     pending_transition=pending_transition,
                     persistence_event="save_required",
                     notes=notes,
-                ),
-            )
+                    ),
+                )
+
+        return self._handle_routed_input(
+            state=state,
+            route_input=cleaned_input,
+            now=now,
+            pending_transition=pending_transition,
+            notes=notes,
+        )
+
+    def _append_turn_messages(self, state: SessionState, user_input: str, output: str) -> None:
+        state.messages.append(Message(role=Role.USER, content=user_input))
+        state.messages.append(Message(role=Role.ASSISTANT, content=output))
+
+    def _handle_routed_input(
+        self,
+        state: SessionState,
+        route_input: str,
+        now: str,
+        pending_transition: PendingTransitionKind,
+        notes: list[str],
+        message_input: str | None = None,
+    ) -> EngineResult:
+        cleaned_input = route_input.strip()
+        if message_input is None:
+            message_input = cleaned_input
 
         normalized = cleaned_input.lower()
 
@@ -239,9 +275,8 @@ class Engine:
                 kind=PolicyOutcomeKind.REQUIRE_CLARIFICATION,
                 reason="The target file is ambiguous.",
             )
-            pending_transition = PendingTransitionKind.CREATED
             rendered_output = pending.prompt
-            self._append_turn_messages(state, cleaned_input, rendered_output)
+            self._append_turn_messages(state, message_input, rendered_output)
             return EngineResult(
                 route_decision=route_decision,
                 policy_outcome=policy_outcome,
@@ -252,7 +287,7 @@ class Engine:
                     policy_outcome=policy_outcome.kind,
                     tool_invoked=False,
                     tool_execution_id=None,
-                    pending_transition=pending_transition,
+                    pending_transition=PendingTransitionKind.CREATED,
                     persistence_event="save_required",
                     notes=notes,
                 ),
@@ -260,15 +295,7 @@ class Engine:
 
         # 6. Explicit modifying requests -> confirmation.
         if normalized.startswith("overwrite "):
-            overwrite_body = cleaned_input[len("overwrite "):]
-
-            if " with " in overwrite_body:
-                file_path, content = overwrite_body.split(" with ", 1)
-            else:
-                file_path, content = overwrite_body, "updated content"
-
-            file_path = file_path.strip()
-            content = content.strip()
+            file_path, content = self._parse_overwrite_request(cleaned_input)
 
             if not file_path:
                 state.pending_clarification = PendingClarification(
@@ -289,9 +316,8 @@ class Engine:
                     kind=PolicyOutcomeKind.REQUIRE_CLARIFICATION,
                     reason="Modifying request is missing a valid target path.",
                 )
-                pending_transition = PendingTransitionKind.CREATED
                 rendered_output = "Which file do you want me to overwrite?"
-                self._append_turn_messages(state, cleaned_input, rendered_output)
+                self._append_turn_messages(state, message_input, rendered_output)
                 return EngineResult(
                     route_decision=route_decision,
                     policy_outcome=policy_outcome,
@@ -302,7 +328,7 @@ class Engine:
                         policy_outcome=policy_outcome.kind,
                         tool_invoked=False,
                         tool_execution_id=None,
-                        pending_transition=pending_transition,
+                        pending_transition=PendingTransitionKind.CREATED,
                         persistence_event="save_required",
                         notes=notes,
                     ),
@@ -318,29 +344,40 @@ class Engine:
                 arguments=action_arguments,
                 reason="User requested a modifying file write.",
             )
-            pending = PendingConfirmation(
-                confirmation_id=str(uuid4()),
-                action_id=requested_action.action_id,
+            return self._create_pending_confirmation_result(
+                state=state,
+                user_input=message_input,
+                now=now,
+                requested_action=requested_action,
+                prompt=f"Please confirm overwriting {file_path}.",
+                pending_transition=(
+                    PendingTransitionKind.RESOLVED
+                    if pending_transition == PendingTransitionKind.RESOLVED
+                    else PendingTransitionKind.CREATED
+                ),
+                notes=notes,
+            )
+
+        if normalized == "write the spec file":
+            state.pending_clarification = PendingClarification(
+                clarification_id=str(uuid4()),
                 created_at=now,
                 expires_at=None,
-                prompt=f"Please confirm overwriting {file_path}.",
-                requested_action=requested_action,
+                prompt="What filename should I use for the spec file?",
+                target=ClarificationTarget.FILE_PATH,
+                bound_user_request=cleaned_input,
+                allowed_reply_kinds=["file_path"],
             )
-            state.pending_confirmation = pending
             route_decision = RouteDecision(
-                kind=RouteKind.TOOL,
-                tool_request=ToolRequest(
-                    tool_name="write_file",
-                    arguments=requested_action.arguments,
-                    user_facing_label=f"writing {file_path}",
-                ),
+                kind=RouteKind.CLARIFY,
+                clarification_prompt="What filename should I use for the spec file?",
+                clarification_target=ClarificationTarget.FILE_PATH,
             )
             policy_outcome = PolicyOutcome(
-                kind=PolicyOutcomeKind.REQUIRE_CONFIRMATION,
-                reason="Modifying actions require confirmation.",
+                kind=PolicyOutcomeKind.REQUIRE_CLARIFICATION,
+                reason="Requested write target is ambiguous.",
             )
-            pending_transition = PendingTransitionKind.CREATED
-            rendered_output = pending.prompt
+            rendered_output = "What filename should I use for the spec file?"
             self._append_turn_messages(state, cleaned_input, rendered_output)
             return EngineResult(
                 route_decision=route_decision,
@@ -352,7 +389,7 @@ class Engine:
                     policy_outcome=policy_outcome.kind,
                     tool_invoked=False,
                     tool_execution_id=None,
-                    pending_transition=pending_transition,
+                    pending_transition=PendingTransitionKind.CREATED,
                     persistence_event="save_required",
                     notes=notes,
                 ),
@@ -375,53 +412,31 @@ class Engine:
                         arguments=action_arguments,
                         reason="User requested file creation.",
                     )
-                    pending = PendingConfirmation(
-                        confirmation_id=str(uuid4()),
-                        action_id=requested_action.action_id,
-                        created_at=now,
-                        expires_at=None,
-                        prompt=f"Please confirm overwriting {file_path}.",
+                    return self._create_pending_confirmation_result(
+                        state=state,
+                        user_input=message_input,
+                        now=now,
                         requested_action=requested_action,
-                    )
-                    state.pending_confirmation = pending
-                    route_decision = RouteDecision(
-                        kind=RouteKind.TOOL,
-                        tool_request=ToolRequest(
-                            tool_name="write_file",
-                            arguments=requested_action.arguments,
-                            user_facing_label=f"writing {file_path}",
+                        prompt=f"Please confirm overwriting {file_path}.",
+                        pending_transition=(
+                            PendingTransitionKind.RESOLVED
+                            if pending_transition == PendingTransitionKind.RESOLVED
+                            else PendingTransitionKind.CREATED
                         ),
-                    )
-                    policy_outcome = PolicyOutcome(
-                        kind=PolicyOutcomeKind.REQUIRE_CONFIRMATION,
-                        reason="Modifying actions require confirmation.",
-                    )
-                    pending_transition = PendingTransitionKind.CREATED
-                    rendered_output = pending.prompt
-                    self._append_turn_messages(state, cleaned_input, rendered_output)
-                    return EngineResult(
-                        route_decision=route_decision,
-                        policy_outcome=policy_outcome,
-                        rendered_output=rendered_output,
-                        tool_result=None,
-                        trace=TurnTrace(
-                            route_kind=route_decision.kind,
-                            policy_outcome=policy_outcome.kind,
-                            tool_invoked=False,
-                            tool_execution_id=None,
-                            pending_transition=pending_transition,
-                            persistence_event="save_required",
-                            notes=notes,
-                        ),
+                        notes=notes,
                     )
 
         if normalized.startswith("show me the contents of "):
             file_path = cleaned_input[len("show me the contents of ") :].strip()
+            arguments = {"path": file_path}
+            if self.workspace_root is not None:
+                arguments["workspace_root"] = self.workspace_root
+
             route_decision = RouteDecision(
                 kind=RouteKind.TOOL,
                 tool_request=ToolRequest(
                     tool_name="read_file",
-                    arguments={"path": file_path},
+                    arguments=arguments,
                     user_facing_label=f"reading {file_path}",
                 ),
             )
@@ -442,7 +457,7 @@ class Engine:
             else:
                 rendered_output = "Read requested, but no read tool handler is configured."
 
-            self._append_turn_messages(state, cleaned_input, rendered_output)
+            self._append_turn_messages(state, message_input, rendered_output)
             return EngineResult(
                 route_decision=route_decision,
                 policy_outcome=policy_outcome,
@@ -493,7 +508,7 @@ class Engine:
             else:
                 rendered_output = "Workspace listing requested, but no tool handler is configured."
 
-            self._append_turn_messages(state, cleaned_input, rendered_output)
+            self._append_turn_messages(state, message_input, rendered_output)
             return EngineResult(
                 route_decision=route_decision,
                 policy_outcome=policy_outcome,
@@ -542,7 +557,7 @@ class Engine:
             else:
                 rendered_output = "Read requested, but no read tool handler is configured."
 
-            self._append_turn_messages(state, cleaned_input, rendered_output)
+            self._append_turn_messages(state, message_input, rendered_output)
             return EngineResult(
                 route_decision=route_decision,
                 policy_outcome=policy_outcome,
@@ -569,7 +584,7 @@ class Engine:
             reason="Direct answer does not require tool use.",
         )
         rendered_output = route_decision.answer_text or "I can help with that."
-        self._append_turn_messages(state, cleaned_input, rendered_output)
+        self._append_turn_messages(state, message_input, rendered_output)
         return EngineResult(
             route_decision=route_decision,
             policy_outcome=policy_outcome,
@@ -586,9 +601,78 @@ class Engine:
             ),
         )
 
-    def _append_turn_messages(self, state: SessionState, user_input: str, output: str) -> None:
-        state.messages.append(Message(role=Role.USER, content=user_input))
-        state.messages.append(Message(role=Role.ASSISTANT, content=output))
+    def _parse_overwrite_request(self, user_input: str) -> tuple[str, str]:
+        overwrite_body = user_input.strip()[len("overwrite "):]
+        if " with " in overwrite_body:
+            file_path, content = overwrite_body.split(" with ", 1)
+        else:
+            file_path, content = overwrite_body, "updated content"
+        return file_path.strip(), content.strip()
+
+    def _reconstruct_clarified_request(
+        self,
+        resolved: PendingClarification,
+        cleaned_input: str,
+    ) -> str | None:
+        original = resolved.bound_user_request.strip().lower()
+        clarified_path = cleaned_input.strip()
+
+        if original.rstrip(".?!") == "open the config file":
+            return f"read {clarified_path}"
+
+        if original == "write the spec file":
+            return f"overwrite {clarified_path} with "
+
+        if original.rstrip(".?!") == "overwrite  with defaults":
+            return f"overwrite {clarified_path} with defaults."
+
+        return None
+
+    def _create_pending_confirmation_result(
+        self,
+        state: SessionState,
+        user_input: str,
+        now: str,
+        requested_action: RequestedAction,
+        prompt: str,
+        pending_transition: PendingTransitionKind,
+        notes: list[str],
+    ) -> EngineResult:
+        pending = PendingConfirmation(
+            confirmation_id=str(uuid4()),
+            action_id=requested_action.action_id,
+            created_at=now,
+            expires_at=None,
+            prompt=prompt,
+            requested_action=requested_action,
+        )
+        state.pending_confirmation = pending
+
+        route_decision = RouteDecision(
+            kind=RouteKind.CONFIRM,
+            confirmation_prompt=prompt,
+            requested_action=requested_action,
+        )
+        policy_outcome = PolicyOutcome(
+            kind=PolicyOutcomeKind.REQUIRE_CONFIRMATION,
+            reason="Modifying actions require confirmation.",
+        )
+        self._append_turn_messages(state, user_input, prompt)
+        return EngineResult(
+            route_decision=route_decision,
+            policy_outcome=policy_outcome,
+            rendered_output=prompt,
+            tool_result=None,
+            trace=TurnTrace(
+                route_kind=route_decision.kind,
+                policy_outcome=policy_outcome.kind,
+                tool_invoked=False,
+                tool_execution_id=None,
+                pending_transition=pending_transition,
+                persistence_event="save_required",
+                notes=notes,
+            ),
+        )
 
     def _default_answer(self, user_input: str) -> str:
         if "what does this assistant do" in user_input.lower():

@@ -88,8 +88,10 @@ def test_modifying_request_creates_pending_confirmation() -> None:
 
     result = engine.handle_turn(state, "Overwrite config.yaml with defaults.")
 
-    assert result.route_decision.kind == RouteKind.TOOL
+    assert result.route_decision.kind == RouteKind.CONFIRM
     assert result.policy_outcome.kind.value == "require_confirmation"
+    assert result.route_decision.requested_action is not None
+    assert result.route_decision.requested_action.tool_name == "write_file"
     assert state.pending_confirmation is not None
     assert state.pending_confirmation.requested_action.tool_name == "write_file"
     assert state.pending_clarification is None
@@ -154,8 +156,8 @@ def test_unrelated_input_clears_pending_confirmation() -> None:
     assert "terminal-first private assistant" in result.rendered_output.lower()
 
 
-def test_resolved_clarification_clears_pending_state() -> None:
-    engine = Engine()
+def test_resolved_clarification_resumes_read_request() -> None:
+    engine = Engine(read_tool=fake_read_tool)
     state = make_state()
 
     engine.handle_turn(state, "Open the config file.")
@@ -163,10 +165,32 @@ def test_resolved_clarification_clears_pending_state() -> None:
 
     result = engine.handle_turn(state, "project-config.yaml")
 
-    assert result.route_decision.kind == RouteKind.CLARIFY
+    assert result.route_decision.kind == RouteKind.TOOL
     assert result.policy_outcome.kind.value == "allow"
+    assert result.tool_result is not None
+    assert result.tool_result.tool_name == "read_file"
+    assert result.tool_result.data["path"] == "project-config.yaml"
     assert state.pending_clarification is None
-    assert "project-config.yaml" in result.rendered_output
+    assert state.last_tool_execution is not None
+
+
+def test_resolved_clarification_for_overwrite_creates_pending_confirmation() -> None:
+    engine = Engine()
+    state = make_state()
+
+    engine.handle_turn(state, "Overwrite  with defaults.")
+    assert state.pending_clarification is not None
+
+    result = engine.handle_turn(state, "config.yaml")
+
+    assert result.route_decision.kind == RouteKind.CONFIRM
+    assert result.policy_outcome.kind.value == "require_confirmation"
+    assert result.route_decision.requested_action is not None
+    assert result.route_decision.requested_action.arguments["path"] == "config.yaml"
+    assert result.route_decision.requested_action.arguments["content"] == "defaults."
+    assert state.pending_clarification is None
+    assert state.pending_confirmation is not None
+    assert state.pending_confirmation.requested_action.arguments["path"] == "config.yaml"
 
 
 def test_read_tool_path_is_allowed_and_records_last_execution() -> None:
@@ -263,6 +287,24 @@ def test_engine_read_blocks_path_outside_workspace(tmp_path) -> None:
     state = make_state()
 
     result = engine.handle_turn(state, f"Read {outside}")
+
+    assert result.route_decision.kind == RouteKind.TOOL
+    assert result.tool_result is not None
+    assert result.tool_result.ok is False
+    assert result.tool_result.error_code == "path_outside_workspace"
+
+
+def test_engine_show_me_contents_blocks_path_outside_workspace(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    outside = tmp_path / "outside.txt"
+    outside.write_text("secret", encoding="utf-8")
+
+    engine = Engine(workspace_root=str(workspace))
+    state = make_state()
+
+    result = engine.handle_turn(state, f"show me the contents of {outside}")
 
     assert result.route_decision.kind == RouteKind.TOOL
     assert result.tool_result is not None
@@ -396,6 +438,35 @@ def test_engine_routes_make_file_phrase() -> None:
     engine = Engine()
     state = make_state()
     result = engine.handle_turn(state, "make a file called test.py that prints hello")
-    assert result.route_decision.kind == RouteKind.TOOL
-    assert result.route_decision.tool_request is not None
-    assert result.route_decision.tool_request.tool_name == "write_file"
+    assert result.route_decision.kind == RouteKind.CONFIRM
+    assert result.route_decision.requested_action is not None
+    assert result.route_decision.requested_action.tool_name == "write_file"
+
+def test_clarification_reply_resumes_original_read_request() -> None:
+    engine = Engine()
+    state = make_state()
+
+    result1 = engine.handle_turn(state, "open the config file")
+    assert result1.route_decision.kind == RouteKind.CLARIFY
+    assert state.pending_clarification is not None
+
+    result2 = engine.handle_turn(state, "config.yaml")
+
+    assert result2.route_decision.kind == RouteKind.TOOL
+    assert result2.route_decision.tool_request is not None
+    assert result2.route_decision.tool_request.tool_name == "read_file"
+
+def test_clarification_reply_resumes_original_write_request_into_confirmation() -> None:
+    engine = Engine()
+    state = make_state()
+
+    result1 = engine.handle_turn(state, "write the spec file")
+    assert result1.route_decision.kind == RouteKind.CLARIFY
+    assert state.pending_clarification is not None
+
+    result2 = engine.handle_turn(state, "spec.md")
+
+    assert result2.route_decision.kind == RouteKind.CONFIRM
+    assert result2.route_decision.requested_action is not None
+    assert result2.route_decision.requested_action.tool_name == "write_file"
+    assert state.pending_confirmation is not None
