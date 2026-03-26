@@ -84,3 +84,38 @@ Result:
 Conclusion:
 - CLI visibility change is successful
 - no new routing or workspace-boundary regression observed in this session
+
+## Session 4 — 2026-03-26
+Tasks intended: probe general conversational behavior after bounded I/O hardening
+
+| # | input (exact) | actual output (brief) | expected | category | impact |
+|---|---|---|---|---|---|
+| 1 | "whats todays date?" | "I understood your request, but this minimal engine only supports the core trusted-turn flows." | answer current date or clearly state out of scope | output-confusing | medium |
+| 2 | "what is your name?" | "I understood your request, but this minimal engine only supports the core trusted-turn flows." | state assistant identity or clearly state out of scope | output-confusing | low |
+| 3 | "what can you do?" | "I understood your request, but this minimal engine only supports the core trusted-turn flows." | brief capability summary | routing-miss | medium |
+| 4 | "search for downloads path ?" | "I understood your request, but this minimal engine only supports the core trusted-turn flows." | clearly state unsupported or ask a narrower file/workspace question | output-confusing | low |
+
+
+## Session 4 — capability/help phrasing validation
+
+Tasks intended: probe natural-language variants around capabilities and local file help
+
+| # | input (exact) | actual output (brief) | expected | category | impact |
+|---|---|---|---|---|---|
+| 1 | "can can you do?" | "That request is outside my current scope..." | brief capability summary | output-confusing | low |
+| 2 | "can you code?" | "That request is outside my current scope..." | clearly state code help is out of scope or supported scope | output-confusing | low |
+| 3 | "list local file directory?" | "That request is outside my current scope..." | clearly guide toward workspace listing phrasing | output-confusing | medium |
+| 4 | "local file help?" | "That request is outside my current scope..." | brief capability/help summary | output-confusing | low |
+| 5 | "help with reading" | "That request is outside my current scope..." | brief read-file capability guidance | output-confusing | medium |
+| 6 | "files?" | "That request is outside my current scope..." | brief workspace/listing guidance | output-confusing | low |
+| 7 | "writing?" | "That request is outside my current scope..." | brief write/confirmation guidance | output-confusing | low |
+
+## Session 4 Conclusion
+
+Pattern:
+- exact handled prompts improved
+- nearby natural-language variants still fall back to the generic out-of-scope response
+
+Decision:
+- next slice should improve capability/help phrasing only
+- do not broaden architecture or routing beyond this small UX cluster
