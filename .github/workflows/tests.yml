@@ -27,3 +27,6 @@ jobs:
 
       - name: Run tests
         run: python -m pytest tests
+
+      - name: Run core contract checkpoint
+        run: bash scripts/checkpoint_core_contract.sh
