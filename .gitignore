@@ -7,3 +7,5 @@ __pycache__/
 
 .assistant_sessions_demo/
 .assistant_sessions/
+
+workspace/
