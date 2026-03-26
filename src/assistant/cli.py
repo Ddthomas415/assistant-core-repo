@@ -6,6 +6,24 @@ from pathlib import Path
 from assistant.engine import Engine
 from assistant.session import SessionCorruptError, SessionNotFoundError, SessionStore
 
+def format_rendered_output(text: str) -> str:
+    lower = text.lower()
+    if lower.startswith('[reading '):
+        return f'[READING]\n{text}'
+    if lower.startswith('[writing '):
+        return f'[WRITING]\n{text}'
+    if lower.startswith('[listing '):
+        return f'[LISTING]\n{text}'
+    if lower.startswith('please confirm '):
+        return f'[CONFIRM]\n{text}'
+    if lower.startswith('which ') or lower.startswith('what filename '):
+        return f'[CLARIFY]\n{text}'
+    if 'failed:' in lower or lower.startswith('operation failed:'):
+        return f'[ERROR]\n{text}'
+    if lower.startswith('wrote '):
+        return f'[OK]\n{text}'
+    return text
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Terminal-first private assistant core")
@@ -63,7 +81,7 @@ def main() -> None:
             break
 
         result = engine.handle_turn(state, user_input)
-        print(result.rendered_output)
+        print(format_rendered_output(result.rendered_output))
         store.save(state)
 
 
