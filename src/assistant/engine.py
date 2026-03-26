@@ -689,6 +689,18 @@ class Engine:
                 "ask clarifying questions when requests are ambiguous, and resume sessions."
             )
 
+        if normalized in {"help with reading", "local file help?"}:
+            return (
+                "I can help read local files in the workspace. Try requests like "
+                "'read notes.txt' or 'show me the contents of notes.txt'."
+            )
+
+        if normalized in {"files?", "list local file directory?"}:
+            return (
+                "I can list files in the workspace. Try requests like "
+                "'what files are in my workspace' or 'can you list everything in the workspace folder'."
+            )
+
         if normalized in {
             "whats todays date?",
             "what's todays date?",

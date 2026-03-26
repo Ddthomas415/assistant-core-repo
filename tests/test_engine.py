@@ -549,3 +549,27 @@ def test_engine_handles_general_out_of_scope_question_cleanly() -> None:
     assert result.route_decision.kind == RouteKind.ANSWER
     assert "out of scope" in result.rendered_output.lower() or "i can help" in result.rendered_output.lower()
     assert "trusted-turn flows" not in result.rendered_output.lower()
+
+def test_engine_answers_help_with_reading_cleanly() -> None:
+    engine = Engine()
+    state = make_state()
+
+    result = engine.handle_turn(state, "help with reading")
+
+    assert result.route_decision.kind == RouteKind.ANSWER
+    text = result.rendered_output.lower()
+    assert "read" in text
+    assert "file" in text or "workspace" in text
+    assert "outside my current scope" not in text
+
+
+def test_engine_answers_files_question_with_workspace_guidance() -> None:
+    engine = Engine()
+    state = make_state()
+
+    result = engine.handle_turn(state, "files?")
+
+    assert result.route_decision.kind == RouteKind.ANSWER
+    text = result.rendered_output.lower()
+    assert "workspace" in text or "list" in text
+    assert "outside my current scope" not in text
