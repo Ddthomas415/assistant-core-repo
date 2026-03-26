@@ -211,3 +211,41 @@ def test_list_workspace_tool_bounds_large_file_list(tmp_path: Path) -> None:
     assert result.ok is True
     assert "files" in result.data
     assert len(result.data["files"]) < 300
+
+def test_read_file_tool_rejects_oversized_file(tmp_path: Path) -> None:
+    file_path = tmp_path / "large.txt"
+    file_path.write_text("x" * (1024 * 1024 + 1), encoding="utf-8")
+
+    request = ToolRequest(
+        tool_name="read_file",
+        arguments={"path": str(file_path)},
+        user_facing_label=f"reading {file_path}",
+    )
+
+    result = read_file_tool(request)
+
+    assert result.ok is False
+    assert result.error_code == "file_too_large"
+
+
+def test_list_workspace_tool_bounds_large_file_list(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    for i in range(300):
+        (workspace / f"file_{i}.txt").write_text("x", encoding="utf-8")
+
+    from assistant.filesystem import list_workspace_tool
+
+    request = ToolRequest(
+        tool_name="list_workspace",
+        arguments={"workspace_root": str(workspace)},
+        user_facing_label="listing workspace",
+    )
+
+    result = list_workspace_tool(request)
+
+    assert result.ok is True
+    assert "files" in result.data
+    assert len(result.data["files"]) <= 200
+    assert result.data["truncated"] is True
