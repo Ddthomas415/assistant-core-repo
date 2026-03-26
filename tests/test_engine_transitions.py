@@ -14,6 +14,7 @@ from assistant.models import (
     SessionMetadata,
     SessionState,
 )
+from assistant.session import SessionStore
 
 
 def now_iso() -> str:
@@ -160,3 +161,20 @@ def test_resumed_expired_pending_clarification_is_cleared_before_normal_answer()
     assert result.route_decision.kind == RouteKind.ANSWER
     assert result.trace.pending_transition == PendingTransitionKind.EXPIRED
     assert state.pending_clarification is None
+
+def test_pending_clarification_survives_resume_and_continues(tmp_path: Path) -> None:
+    store = SessionStore(tmp_path)
+    engine = Engine(workspace_root="workspace")
+
+    state = store.create()
+    result1 = engine.handle_turn(state, "open the config file")
+    assert result1.route_decision.kind == RouteKind.CLARIFY
+    assert state.pending_clarification is not None
+
+    store.save(state)
+    resumed = store.load(state.session_id)
+
+    result2 = engine.handle_turn(resumed, "config.yaml")
+
+    assert result2.route_decision.kind == RouteKind.TOOL
+    assert result2.tool_result is not None or result2.route_decision.tool_request is not None
