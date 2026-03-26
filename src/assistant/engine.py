@@ -675,12 +675,36 @@ class Engine:
         )
 
     def _default_answer(self, user_input: str) -> str:
-        if "what does this assistant do" in user_input.lower():
+        normalized = user_input.lower().strip()
+
+        if "what does this assistant do" in normalized:
             return (
                 "This is a terminal-first private assistant that can answer directly, "
                 "use workspace tools when needed, clarify ambiguity, and confirm modifying actions."
             )
-        return "I understood your request, but this minimal engine only supports the core trusted-turn flows."
+
+        if normalized in {"what can you do?", "what can you do", "help"}:
+            return (
+                "I can read files, write files with confirmation, list workspace files, "
+                "ask clarifying questions when requests are ambiguous, and resume sessions."
+            )
+
+        if normalized in {
+            "whats todays date?",
+            "what's todays date?",
+            "what is todays date?",
+            "what is today's date?",
+        }:
+            return (
+                "That is outside my current scope. I can help with local file and workspace tasks "
+                "inside this assistant."
+            )
+
+        return (
+            "That request is outside my current scope. I can help with local file and workspace "
+            "tasks, including reading files, writing with confirmation, listing workspace files, "
+            "and clarifying ambiguous requests."
+        )
 
     def _tool_label(self, tool_name: str, arguments: dict[str, str]) -> str:
         path = arguments.get("path", "")

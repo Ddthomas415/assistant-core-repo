@@ -527,3 +527,25 @@ def test_repeated_open_config_file_still_clarifies_after_prior_sequence() -> Non
 
     result6 = engine.handle_turn(state, "open the config file")
     assert result6.route_decision.kind == RouteKind.CLARIFY
+
+def test_engine_answers_capability_question_directly() -> None:
+    engine = Engine()
+    state = make_state()
+
+    result = engine.handle_turn(state, "what can you do?")
+
+    assert result.route_decision.kind == RouteKind.ANSWER
+    assert "read" in result.rendered_output.lower()
+    assert "write" in result.rendered_output.lower()
+    assert "clarif" in result.rendered_output.lower() or "confirm" in result.rendered_output.lower()
+
+
+def test_engine_handles_general_out_of_scope_question_cleanly() -> None:
+    engine = Engine()
+    state = make_state()
+
+    result = engine.handle_turn(state, "whats todays date?")
+
+    assert result.route_decision.kind == RouteKind.ANSWER
+    assert "out of scope" in result.rendered_output.lower() or "i can help" in result.rendered_output.lower()
+    assert "trusted-turn flows" not in result.rendered_output.lower()
