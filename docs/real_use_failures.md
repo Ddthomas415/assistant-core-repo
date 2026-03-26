@@ -44,3 +44,15 @@ Remaining items:
 Decision:
 - Heuristic routing is sufficient for the current workflow
 - No LLM-router work is justified from this session
+
+## Session 2 — 2026-03-26
+Tasks intended: validate clarification follow-through and workspace-bound behavior after the latest main-branch changes
+
+| # | input (exact) | actual output (brief) | expected | category | impact |
+|---|---|---|---|---|---|
+| 1 | "open the config file" → "config.yaml" | "Operation failed: path is outside workspace: /Users/baitus/assistant-core-repo/config.yaml" | clarified read should resolve inside configured workspace | routing-miss | high |
+| 2 | "write the spec file" → "spec.md" → "yes" | "Please confirm overwriting spec.md with." then attempts to write path "spec.md with" outside workspace | clarified write should preserve filename and enter correct confirmation/write flow | wrong-confirmation | high |
+| 3 | "show me the contents of notes.txt" | "Operation failed: path is outside workspace: /Users/baitus/assistant-core-repo/notes.txt" | read should resolve notes.txt relative to configured workspace | routing-miss | high |
+| 4 | "make a file called test.py that prints hello" → "yes" | "Operation failed: path is outside workspace: /Users/baitus/assistant-core-repo/test.py" | write should resolve target inside configured workspace | routing-miss | high |
+| 5 | "open the config file" (after failed sequence) | "I understood your request, but this minimal engine only supports the core trusted-turn flows." | should clarify consistently | routing-miss | medium |
+
