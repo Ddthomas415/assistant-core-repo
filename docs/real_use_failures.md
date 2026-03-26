@@ -70,3 +70,17 @@ Not a regression:
 
 Still open:
 - repeating "open the config file" after the prior sequence falls back to the default answer instead of clarifying again
+
+## Session 3 — CLI visibility validation
+
+Result:
+- highlighted CLI output improves visibility for clarify/confirm/read/write/list states
+- clarification flow worked
+- workspace-root resolution worked
+- write confirmation worked
+- workspace listing worked
+- reading config.yaml failed only because the file does not exist in ./workspace
+
+Conclusion:
+- CLI visibility change is successful
+- no new routing or workspace-boundary regression observed in this session
