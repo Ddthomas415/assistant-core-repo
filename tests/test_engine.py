@@ -470,3 +470,23 @@ def test_clarification_reply_resumes_original_write_request_into_confirmation() 
     assert result2.route_decision.requested_action is not None
     assert result2.route_decision.requested_action.tool_name == "write_file"
     assert state.pending_confirmation is not None
+
+def test_clarified_read_uses_workspace_root_for_relative_path(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    target = workspace / "config.yaml"
+    target.write_text("name: demo", encoding="utf-8")
+
+    engine = Engine(workspace_root=str(workspace))
+    state = make_state()
+
+    result1 = engine.handle_turn(state, "open the config file")
+    assert result1.route_decision.kind == RouteKind.CLARIFY
+    assert state.pending_clarification is not None
+
+    result2 = engine.handle_turn(state, "config.yaml")
+
+    assert result2.route_decision.kind == RouteKind.TOOL
+    assert result2.tool_result is not None
+    assert result2.tool_result.ok is True
+    assert result2.tool_result.data["path"] == str(target.resolve())

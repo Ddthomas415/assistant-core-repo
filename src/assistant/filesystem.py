@@ -52,7 +52,12 @@ def _resolve_target_path(tool_name: str, request: ToolRequest, started_at: str) 
         return None, _invalid_path_result(tool_name, started_at)
 
     try:
-        path = Path(path_value).expanduser().resolve(strict=False)
+        raw_path = Path(path_value).expanduser()
+        workspace_root = _resolve_workspace_root(request.arguments.get("workspace_root"))
+        if workspace_root is not None and not raw_path.is_absolute():
+            path = (workspace_root / raw_path).resolve(strict=False)
+        else:
+            path = raw_path.resolve(strict=False)
     except OSError as exc:
         return None, ToolResult(
             ok=False,
