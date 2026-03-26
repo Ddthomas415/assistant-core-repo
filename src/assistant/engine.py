@@ -701,6 +701,13 @@ class Engine:
                 "'what files are in my workspace' or 'can you list everything in the workspace folder'."
             )
 
+        if normalized in {"writing?", "writing"}:
+            return (
+                "I can help write files with confirmation. Try requests like "
+                "'make a file called test.py that prints hello' or 'overwrite notes.txt with updated text'. "
+                "I will ask for confirmation before modifying files."
+            )
+
         if normalized in {
             "whats todays date?",
             "what's todays date?",

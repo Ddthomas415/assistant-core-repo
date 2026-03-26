@@ -573,3 +573,15 @@ def test_engine_answers_files_question_with_workspace_guidance() -> None:
     text = result.rendered_output.lower()
     assert "workspace" in text or "list" in text
     assert "outside my current scope" not in text
+
+def test_engine_answers_writing_question_with_write_guidance() -> None:
+    engine = Engine()
+    state = make_state()
+
+    result = engine.handle_turn(state, "writing?")
+
+    assert result.route_decision.kind == RouteKind.ANSWER
+    text = result.rendered_output.lower()
+    assert "write" in text or "writing" in text
+    assert "confirm" in text
+    assert "outside my current scope" not in text
