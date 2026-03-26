@@ -61,7 +61,7 @@ def test_clarification_reply_resolves_pending_clarification_with_resolved_transi
     engine.handle_turn(state, "Open the config file.")
     result = engine.handle_turn(state, "project-config.yaml")
 
-    assert result.route_decision.kind == RouteKind.CLARIFY
+    assert result.route_decision.kind == RouteKind.TOOL
     assert result.trace.pending_transition == PendingTransitionKind.RESOLVED
     assert state.pending_clarification is None
 
@@ -78,13 +78,26 @@ def test_unrelated_input_supersedes_pending_clarification() -> None:
     assert state.pending_clarification is None
 
 
+def test_clarified_overwrite_resolves_pending_clarification_and_creates_confirmation() -> None:
+    engine = Engine()
+    state = make_state()
+
+    engine.handle_turn(state, "Overwrite  with defaults.")
+    result = engine.handle_turn(state, "config.yaml")
+
+    assert result.route_decision.kind == RouteKind.CONFIRM
+    assert result.trace.pending_transition == PendingTransitionKind.RESOLVED
+    assert state.pending_clarification is None
+    assert state.pending_confirmation is not None
+
+
 def test_modifying_request_creates_pending_confirmation_with_created_transition() -> None:
     engine = Engine()
     state = make_state()
 
     result = engine.handle_turn(state, "Overwrite config.yaml with defaults.")
 
-    assert result.route_decision.kind == RouteKind.TOOL
+    assert result.route_decision.kind == RouteKind.CONFIRM
     assert result.trace.pending_transition == PendingTransitionKind.CREATED
     assert state.pending_confirmation is not None
 

@@ -1,32 +1,34 @@
 # assistant-core-repo
 
-## What this repo is
+## Project Overview
 
 This repo is a terminal-first private assistant core focused on trust-first behavior.
 
-Current scope only:
+It is intentionally small and deterministic:
+- a thin CLI accepts user input
+- an engine handles routing and state transitions
+- policy helpers enforce simple deterministic behavior
+- filesystem helpers provide controlled read/write operations
+- session persistence stores state as JSON
+
+This is not a general assistant platform. It is a focused assistant core for controlled local workflows.
+
+## Current Implemented Behavior
+
 - direct answers when no tool is needed
 - clarification for ambiguous requests
+- clarification follow-through for the current supported ambiguous read/write flows
 - confirmation before modifying actions
-- controlled filesystem read/write flows
+- filesystem read/write flows
 - workspace boundary enforcement
 - session persistence and resume
-- a thin CLI over the engine
+- thin CLI entrypoint
+- regression test suite
 
-It is not a general assistant platform. It is a small, tested assistant core.
+Verified locally:
+- `83 passed` via `pytest -q`
 
-## What is implemented now
-
-- direct answers
-- clarification flow
-- confirmation before modifying actions
-- controlled filesystem read/write flows
-- workspace boundary enforcement
-- session persistence and resume
-- a thin CLI
-- current test status: 56 passing tests
-
-## What is not implemented
+## What Is Not Implemented
 
 - no web UI
 - no long-term memory
@@ -58,11 +60,15 @@ Basic CLI:
 
 With workspace boundary enforcement:
 
-    assistant-core       --session-dir .assistant_sessions       --workspace-root /absolute/path/to/workspace
+    assistant-core \
+      --session-dir .assistant_sessions \
+      --workspace-root "$PWD/workspace"
 
 Resume a prior session:
 
-    assistant-core       --session-dir .assistant_sessions       --resume <session-id>
+    assistant-core \
+      --session-dir .assistant_sessions \
+      --resume <session-id>
 
 Session storage:
 - sessions are stored in the directory passed to `--session-dir`
@@ -73,12 +79,21 @@ Session storage:
 
 Run the full test suite:
 
-    python3 -m pytest tests
+    python3 -m pytest tests -q
+
+Run the checkpoint script:
+
+    bash scripts/checkpoint_core_contract.sh
+
+One-shot bootstrap:
+
+    bash scripts/dev.sh
 
 ## Repo map
 
 Small core modules only:
 - `docs/spec-v1.md` - frozen assistant core contract
+- `docs/real_use_failures.md` - real-use evidence log
 - `src/assistant/models.py` - typed state, decisions, results, trace objects
 - `src/assistant/session.py` - versioned session persistence and corruption checks
 - `src/assistant/policy.py` - deterministic safety and parsing helpers
@@ -97,6 +112,25 @@ New abstractions must be justified by:
 - testability
 
 Do not add architecture layers unless the current behavior and tests prove they are needed.
+
+## Known Issues / TODOs
+
+- routing remains heuristic and phrase-based
+- large file reads should be bounded
+- large workspace listings should be bounded
+- session/schema hardening can continue if new formats are introduced
+- CI currently runs `pytest` but does not yet run `bash scripts/checkpoint_core_contract.sh`
+- local reviewed changes are present and should be committed explicitly before final archival or handoff packaging
+
+## Handoff Note
+
+Recommended recovery order:
+1. read `README.md`
+2. read `docs/spec-v1.md`
+3. read `docs/real_use_failures.md`
+4. run tests
+5. inspect `git status` and recent commits
+6. review any local diffs before packaging or handoff
 
 ## Platform note
 

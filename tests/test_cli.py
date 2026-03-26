@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import subprocess
 import sys
+
+from assistant.session import utc_now_iso
 
 
 def test_cli_starts_and_exits(tmp_path: Path) -> None:
@@ -88,6 +91,49 @@ def test_cli_resume_existing_session_loads_same_session_id(tmp_path: Path) -> No
     assert f"Session: {session_id}" in second.stdout
 
 
+def test_cli_resume_corrupt_session_fails_cleanly_without_traceback(tmp_path: Path) -> None:
+    session_dir = tmp_path / "sessions"
+    session_dir.mkdir()
+    session_id = "broken-session"
+    (session_dir / f"{session_id}.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "session_id": session_id,
+                "metadata": {
+                    "created_at": utc_now_iso(),
+                    "updated_at": utc_now_iso(),
+                },
+                "messages": [],
+                "summary": None,
+                "pending_clarification": {"bad": "shape"},
+                "pending_confirmation": None,
+                "last_tool_execution": None,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "assistant.cli",
+            "--session-dir",
+            str(session_dir),
+            "--resume",
+            session_id,
+        ],
+        text=True,
+        capture_output=True,
+    )
+
+    combined_output = f"{result.stdout}\n{result.stderr}"
+    assert result.returncode != 0
+    assert "resume failed:" in combined_output.lower()
+    assert "traceback" not in combined_output.lower()
+
+
 def test_cli_prints_workspace_root_when_provided(tmp_path: Path) -> None:
     session_dir = tmp_path / "sessions"
     workspace_root = tmp_path / "workspace"
@@ -131,6 +177,33 @@ def test_cli_read_outside_workspace_fails_cleanly(tmp_path: Path) -> None:
             str(workspace_root),
         ],
         input=f"Read {outside}\nexit\n",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert "outside workspace" in result.stdout.lower()
+
+
+def test_cli_show_me_contents_outside_workspace_fails_cleanly(tmp_path: Path) -> None:
+    session_dir = tmp_path / "sessions"
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+
+    outside = tmp_path / "outside.txt"
+    outside.write_text("secret", encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "assistant.cli",
+            "--session-dir",
+            str(session_dir),
+            "--workspace-root",
+            str(workspace_root),
+        ],
+        input=f"show me the contents of {outside}\nexit\n",
         text=True,
         capture_output=True,
         check=True,

@@ -97,6 +97,40 @@ def test_missing_required_field_raises_corrupt_error(tmp_path: Path) -> None:
         store.load(session_id)
 
 
+def test_non_object_root_payload_raises_corrupt_error(tmp_path: Path) -> None:
+    store = make_store(tmp_path)
+    session_id = str(uuid4())
+    path = store.path_for(session_id)
+    path.write_text(json.dumps(["not", "an", "object"]), encoding="utf-8")
+
+    with pytest.raises(SessionCorruptError):
+        store.load(session_id)
+
+
+def test_invalid_summary_type_raises_corrupt_error(tmp_path: Path) -> None:
+    store = make_store(tmp_path)
+    session_id = str(uuid4())
+    path = store.path_for(session_id)
+
+    payload = {
+        "schema_version": 1,
+        "session_id": session_id,
+        "metadata": {
+            "created_at": utc_now_iso(),
+            "updated_at": utc_now_iso(),
+        },
+        "messages": [],
+        "summary": 123,
+        "pending_clarification": None,
+        "pending_confirmation": None,
+        "last_tool_execution": None,
+    }
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+    with pytest.raises(SessionCorruptError):
+        store.load(session_id)
+
+
 def test_dual_pending_state_raises_corrupt_error(tmp_path: Path) -> None:
     store = make_store(tmp_path)
     session_id = str(uuid4())

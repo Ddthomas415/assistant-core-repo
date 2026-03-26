@@ -80,7 +80,7 @@ class SessionStore:
 
         path = self.path_for(state.session_id)
         tmp_path = path.with_suffix(".json.tmp")
-        tmp_path.write_text(json.dumps(payload, indent=2))
+        tmp_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         tmp_path.replace(path)
 
     def load(self, session_id: str) -> SessionState:
@@ -89,7 +89,11 @@ class SessionStore:
             raise SessionNotFoundError(f"Session '{session_id}' not found.")
 
         try:
-            payload = json.loads(path.read_text())
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except UnicodeDecodeError as exc:
+            raise SessionCorruptError(
+                f"Session '{session_id}' is corrupt: file is not valid UTF-8."
+            ) from exc
         except json.JSONDecodeError as exc:
             raise SessionCorruptError(
                 f"Session '{session_id}' is corrupt: invalid JSON."
@@ -97,7 +101,12 @@ class SessionStore:
 
         return self._state_from_payload(session_id, payload)
 
-    def _state_from_payload(self, session_id: str, payload: dict) -> SessionState:
+    def _state_from_payload(self, session_id: str, payload: object) -> SessionState:
+        if not isinstance(payload, dict):
+            raise SessionCorruptError(
+                f"Session '{session_id}' is corrupt: root payload must be an object."
+            )
+
         required_root = {
             "schema_version",
             "session_id",
@@ -168,6 +177,12 @@ class SessionStore:
                     f"Session '{session_id}' is corrupt: unknown role '{role}'."
                 ) from exc
 
+        summary = payload["summary"]
+        if summary is not None and not isinstance(summary, str):
+            raise SessionCorruptError(
+                f"Session '{session_id}' is corrupt: summary must be a string or null."
+            )
+
         pending_clarification = self._parse_pending_clarification(
             session_id, payload["pending_clarification"]
         )
@@ -189,7 +204,7 @@ class SessionStore:
             schema_version=schema_version,
             metadata=SessionMetadata(created_at=created_at, updated_at=updated_at),
             messages=messages,
-            summary=payload["summary"],
+            summary=summary,
             pending_clarification=pending_clarification,
             pending_confirmation=pending_confirmation,
             last_tool_execution=last_tool_execution,
@@ -207,6 +222,19 @@ class SessionStore:
                 f"Session '{session_id}' is corrupt: pending_clarification must be an object."
             )
 
+        required = [
+            "clarification_id",
+            "created_at",
+            "prompt",
+            "target",
+            "bound_user_request",
+        ]
+        for field_name in required:
+            if field_name not in value:
+                raise SessionCorruptError(
+                    f"Session '{session_id}' is corrupt: pending_clarification missing '{field_name}'."
+                )
+
         try:
             target = ClarificationTarget(value["target"])
         except Exception as exc:
@@ -221,19 +249,6 @@ class SessionStore:
             raise SessionCorruptError(
                 f"Session '{session_id}' is corrupt: allowed_reply_kinds is invalid."
             )
-
-        required = [
-            "clarification_id",
-            "created_at",
-            "prompt",
-            "target",
-            "bound_user_request",
-        ]
-        for field_name in required:
-            if field_name not in value:
-                raise SessionCorruptError(
-                    f"Session '{session_id}' is corrupt: pending_clarification missing '{field_name}'."
-                )
 
         return PendingClarification(
             clarification_id=self._require_str(session_id, value, "clarification_id"),
