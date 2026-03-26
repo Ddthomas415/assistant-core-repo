@@ -505,3 +505,25 @@ def test_clarified_write_preserves_filename_without_with_suffix() -> None:
     assert state.pending_confirmation is not None
     assert state.pending_confirmation.requested_action.arguments["path"] == "spec.md"
     assert state.pending_confirmation.prompt == "Please confirm overwriting spec.md."
+
+def test_repeated_open_config_file_still_clarifies_after_prior_sequence() -> None:
+    engine = Engine(workspace_root="workspace")
+    state = make_state()
+
+    result1 = engine.handle_turn(state, "open the config file")
+    assert result1.route_decision.kind == RouteKind.CLARIFY
+
+    result2 = engine.handle_turn(state, "config.yaml")
+    assert result2.route_decision.kind == RouteKind.TOOL
+
+    result3 = engine.handle_turn(state, "write the spec file")
+    assert result3.route_decision.kind == RouteKind.CLARIFY
+
+    result4 = engine.handle_turn(state, "spec.md")
+    assert result4.route_decision.kind == RouteKind.CONFIRM
+
+    result5 = engine.handle_turn(state, "yes")
+    assert result5.route_decision.kind == RouteKind.CONFIRM
+
+    result6 = engine.handle_turn(state, "open the config file")
+    assert result6.route_decision.kind == RouteKind.CLARIFY
