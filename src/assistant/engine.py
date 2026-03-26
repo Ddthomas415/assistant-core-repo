@@ -621,7 +621,7 @@ class Engine:
             return f"read {clarified_path}"
 
         if original == "write the spec file":
-            return f"overwrite {clarified_path} with "
+            return f"overwrite {clarified_path}"
 
         if original.rstrip(".?!") == "overwrite  with defaults":
             return f"overwrite {clarified_path} with defaults."

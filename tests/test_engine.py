@@ -490,3 +490,18 @@ def test_clarified_read_uses_workspace_root_for_relative_path(tmp_path) -> None:
     assert result2.tool_result is not None
     assert result2.tool_result.ok is True
     assert result2.tool_result.data["path"] == str(target.resolve())
+
+def test_clarified_write_preserves_filename_without_with_suffix() -> None:
+    engine = Engine()
+    state = make_state()
+
+    result1 = engine.handle_turn(state, "write the spec file")
+    assert result1.route_decision.kind == RouteKind.CLARIFY
+    assert state.pending_clarification is not None
+
+    result2 = engine.handle_turn(state, "spec.md")
+
+    assert result2.route_decision.kind == RouteKind.CONFIRM
+    assert state.pending_confirmation is not None
+    assert state.pending_confirmation.requested_action.arguments["path"] == "spec.md"
+    assert state.pending_confirmation.prompt == "Please confirm overwriting spec.md."
