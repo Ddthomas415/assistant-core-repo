@@ -59,7 +59,7 @@ def test_expired_confirmation_adds_expired_trace_note_and_does_not_mutate_last_t
 
     result = engine.handle_turn(state, "yes")
 
-    assert result.route_decision.kind == RouteKind.CONFIRM
+    assert result.route_decision.kind == RouteKind.ANSWER
     assert result.policy_outcome.kind.value == "block"
     assert result.trace.tool_invoked is False
     assert result.trace.tool_execution_id is None
@@ -146,6 +146,6 @@ def test_stale_confirmation_does_not_mutate_filesystem(tmp_path) -> None:
 
     result = engine.handle_turn(state, "yes")
 
-    assert result.route_decision.kind == RouteKind.CONFIRM
+    assert result.route_decision.kind == RouteKind.ANSWER
     assert result.policy_outcome.kind.value == "block"
     assert file_path.read_text(encoding="utf-8") == "original"

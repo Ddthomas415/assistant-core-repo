@@ -73,7 +73,6 @@ def _resolve_target_path(tool_name: str, request: ToolRequest, started_at: str) 
             finished_at=utc_now_iso(),
         )
 
-    workspace_root = _resolve_workspace_root(request.arguments.get("workspace_root"))
     if workspace_root is not None:
         try:
             path.relative_to(workspace_root)
@@ -161,7 +160,7 @@ def read_file_tool(request: ToolRequest) -> ToolResult:
         data={
             "path": str(path),
             "content": content,
-            "size_bytes": path.stat().st_size,
+            "size_bytes": size_bytes,
         },
         started_at=started_at,
         finished_at=utc_now_iso(),
@@ -292,4 +291,3 @@ def list_workspace_tool(request: ToolRequest) -> ToolResult:
         started_at=started_at,
         finished_at=utc_now_iso(),
     )
-

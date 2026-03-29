@@ -30,6 +30,8 @@ class PolicyOutcomeKind(str, Enum):
 
 class ClarificationTarget(str, Enum):
     FILE_PATH = "file_path"
+    # Reserved targets for future clarification flows. The current engine does
+    # not create pending clarifications for these targets.
     ACTION_SCOPE = "action_scope"
     ACTION_CONTENT = "action_content"
     UNKNOWN = "unknown"

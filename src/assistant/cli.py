@@ -20,8 +20,6 @@ def format_rendered_output(text: str) -> str:
         return f'[CLARIFY]\n{text}'
     if 'failed:' in lower or lower.startswith('operation failed:'):
         return f'[ERROR]\n{text}'
-    if lower.startswith('wrote '):
-        return f'[OK]\n{text}'
     return text
 
 

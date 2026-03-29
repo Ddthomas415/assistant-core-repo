@@ -20,13 +20,14 @@ This is not a general assistant platform. It is a focused assistant core for con
 - clarification follow-through for the current supported ambiguous read/write flows
 - confirmation before modifying actions
 - filesystem read/write flows
+- bounded file reads and bounded workspace listings
 - workspace boundary enforcement
 - session persistence and resume
 - thin CLI entrypoint
 - regression test suite
 
 Verified locally:
-- `83 passed` via `pytest -q`
+- current suite passes via `pytest -q`
 
 ## What Is Not Implemented
 
@@ -94,6 +95,7 @@ One-shot bootstrap:
 Small core modules only:
 - `docs/spec-v1.md` - frozen assistant core contract
 - `docs/real_use_failures.md` - real-use evidence log
+- `docs/TASKS.md` - builder task list and next-slice priorities
 - `src/assistant/models.py` - typed state, decisions, results, trace objects
 - `src/assistant/session.py` - versioned session persistence and corruption checks
 - `src/assistant/policy.py` - deterministic safety and parsing helpers
@@ -116,21 +118,19 @@ Do not add architecture layers unless the current behavior and tests prove they 
 ## Known Issues / TODOs
 
 - routing remains heuristic and phrase-based
-- large file reads should be bounded
-- large workspace listings should be bounded
 - session/schema hardening can continue if new formats are introduced
-- CI currently runs `pytest` but does not yet run `bash scripts/checkpoint_core_contract.sh`
-- local reviewed changes are present and should be committed explicitly before final archival or handoff packaging
+- local untracked or review-only artifacts should be checked explicitly before archival or handoff packaging
 
 ## Handoff Note
 
 Recommended recovery order:
 1. read `README.md`
 2. read `docs/spec-v1.md`
-3. read `docs/real_use_failures.md`
-4. run tests
-5. inspect `git status` and recent commits
-6. review any local diffs before packaging or handoff
+3. read `docs/TASKS.md`
+4. read `docs/real_use_failures.md`
+5. run tests
+6. inspect `git status` and recent commits
+7. review any local diffs before packaging or handoff
 
 ## Platform note
 

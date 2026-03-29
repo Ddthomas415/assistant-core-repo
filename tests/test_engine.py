@@ -6,6 +6,7 @@ from uuid import uuid4
 from assistant.engine import Engine
 from assistant.models import (
     ClarificationTarget,
+    PendingClarification,
     PendingConfirmation,
     RequestedAction,
     RouteKind,
@@ -51,6 +52,18 @@ def fake_write_tool(request: ToolRequest) -> ToolResult:
         execution_id=str(uuid4()),
         summary=f"Wrote {request.arguments['path']}",
         data={"path": request.arguments["path"]},
+        started_at=now_iso(),
+        finished_at=now_iso(),
+    )
+
+
+def fake_list_tool(request: ToolRequest) -> ToolResult:
+    return ToolResult(
+        ok=True,
+        tool_name=request.tool_name,
+        execution_id=str(uuid4()),
+        summary="Workspace: injected\nsample.txt",
+        data={"workspace_root": request.arguments.get("workspace_root"), "files": ["sample.txt"], "truncated": False},
         started_at=now_iso(),
         finished_at=now_iso(),
     )
@@ -135,7 +148,7 @@ def test_stale_confirmation_does_not_execute() -> None:
 
     result = engine.handle_turn(state, "confirm")
 
-    assert result.route_decision.kind == RouteKind.CONFIRM
+    assert result.route_decision.kind == RouteKind.ANSWER
     assert result.policy_outcome.kind.value == "block"
     assert result.tool_result is None
     assert state.pending_confirmation is None
@@ -426,6 +439,17 @@ def test_engine_routes_workspace_listing_phrase() -> None:
     assert result.route_decision.tool_request is not None
     assert result.route_decision.tool_request.tool_name == "list_workspace"
 
+def test_engine_list_workspace_uses_injected_handler() -> None:
+    engine = Engine(list_tool=fake_list_tool, workspace_root="workspace")
+    state = make_state()
+
+    result = engine.handle_turn(state, "what files are in my workspace")
+
+    assert result.route_decision.kind == RouteKind.TOOL
+    assert result.tool_result is not None
+    assert result.tool_result.tool_name == "list_workspace"
+    assert result.tool_result.data["files"] == ["sample.txt"]
+
 def test_engine_routes_show_me_contents_phrase() -> None:
     engine = Engine()
     state = make_state()
@@ -441,6 +465,22 @@ def test_engine_routes_make_file_phrase() -> None:
     assert result.route_decision.kind == RouteKind.CONFIRM
     assert result.route_decision.requested_action is not None
     assert result.route_decision.requested_action.tool_name == "write_file"
+
+def test_make_file_called_flow_writes_after_confirmation(tmp_path) -> None:
+    engine = Engine(workspace_root=str(tmp_path))
+    state = make_state()
+
+    result1 = engine.handle_turn(state, "make a file called test.py that prints hello")
+    assert result1.route_decision.kind == RouteKind.CONFIRM
+    assert state.pending_confirmation is not None
+
+    result2 = engine.handle_turn(state, "yes")
+
+    assert result2.route_decision.kind == RouteKind.CONFIRM
+    assert result2.policy_outcome.kind.value == "allow"
+    assert result2.tool_result is not None
+    assert result2.tool_result.ok is True
+    assert (tmp_path / "test.py").read_text(encoding="utf-8") == "hello"
 
 def test_clarification_reply_resumes_original_read_request() -> None:
     engine = Engine()
@@ -470,6 +510,25 @@ def test_clarification_reply_resumes_original_write_request_into_confirmation() 
     assert result2.route_decision.requested_action is not None
     assert result2.route_decision.requested_action.tool_name == "write_file"
     assert state.pending_confirmation is not None
+
+def test_write_spec_file_flow_executes_after_confirmation(tmp_path) -> None:
+    engine = Engine(workspace_root=str(tmp_path))
+    state = make_state()
+
+    result1 = engine.handle_turn(state, "write the spec file")
+    assert result1.route_decision.kind == RouteKind.CLARIFY
+
+    result2 = engine.handle_turn(state, "spec.md")
+    assert result2.route_decision.kind == RouteKind.CONFIRM
+    assert state.pending_confirmation is not None
+
+    result3 = engine.handle_turn(state, "yes")
+
+    assert result3.route_decision.kind == RouteKind.CONFIRM
+    assert result3.policy_outcome.kind.value == "allow"
+    assert result3.tool_result is not None
+    assert result3.tool_result.ok is True
+    assert (tmp_path / "spec.md").read_text(encoding="utf-8") == "updated content"
 
 def test_clarified_read_uses_workspace_root_for_relative_path(tmp_path) -> None:
     workspace = tmp_path / "workspace"
@@ -527,6 +586,27 @@ def test_repeated_open_config_file_still_clarifies_after_prior_sequence() -> Non
 
     result6 = engine.handle_turn(state, "open the config file")
     assert result6.route_decision.kind == RouteKind.CLARIFY
+
+def test_unmatched_reconstructed_clarification_acknowledges_without_follow_up_action() -> None:
+    engine = Engine()
+    state = make_state()
+
+    state.pending_clarification = PendingClarification(
+        clarification_id=str(uuid4()),
+        created_at=now_iso(),
+        expires_at=None,
+        prompt="Which file should I use?",
+        target=ClarificationTarget.FILE_PATH,
+        bound_user_request="Use a file for the report.",
+        allowed_reply_kinds=["file_path"],
+    )
+
+    result = engine.handle_turn(state, "report.txt")
+
+    assert result.route_decision.kind == RouteKind.CLARIFY
+    assert result.policy_outcome.kind.value == "allow"
+    assert "i’ll use 'report.txt' as the file path." in result.rendered_output.lower()
+    assert state.pending_clarification is None
 
 def test_engine_answers_capability_question_directly() -> None:
     engine = Engine()

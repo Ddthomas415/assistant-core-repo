@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Callable
 from uuid import uuid4
 
-from .filesystem import read_file_tool, write_file_tool
+from .filesystem import list_workspace_tool, read_file_tool, write_file_tool
 from .models import (
     ClarificationTarget,
     EngineResult,
@@ -52,6 +52,7 @@ class Engine:
 
     read_tool: Callable[[ToolRequest], ToolResult] | None = None
     write_tool: Callable[[ToolRequest], ToolResult] | None = None
+    list_tool: Callable[[ToolRequest], ToolResult] | None = None
     workspace_root: str | None = None
 
     def handle_turn(self, state: SessionState, user_input: str) -> EngineResult:
@@ -200,16 +201,15 @@ class Engine:
         # 4. Stale yes/confirm with no valid pending confirmation.
         if is_confirmation_reply(cleaned_input):
             route_decision = RouteDecision(
-                kind=RouteKind.CONFIRM,
-                confirmation_prompt="No valid pending confirmation.",
-                requested_action=None,
+                kind=RouteKind.ANSWER,
+                answer_text="There is no valid pending confirmation to apply.",
             )
             policy_outcome = PolicyOutcome(
                 kind=PolicyOutcomeKind.BLOCK,
                 reason="No valid pending confirmation exists.",
                 blocking_code="no_pending_confirmation",
             )
-            rendered_output = "There is no valid pending confirmation to apply."
+            rendered_output = route_decision.answer_text
             self._append_turn_messages(state, cleaned_input, rendered_output)
             return EngineResult(
                 route_decision=route_decision,
@@ -743,6 +743,7 @@ class Engine:
                 return self.write_tool(tool_request)
             return write_file_tool(tool_request)
         if tool_request.tool_name == "list_workspace":
-            from .filesystem import list_workspace_tool
+            if self.list_tool is not None:
+                return self.list_tool(tool_request)
             return list_workspace_tool(tool_request)
         return None

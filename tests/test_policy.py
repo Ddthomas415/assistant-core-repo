@@ -104,3 +104,18 @@ def test_satisfies_clarification_rejects_unrelated_question_for_file_path() -> N
     )
 
     assert satisfies_clarification(pending, "What does this assistant do?") is False
+
+
+def test_satisfies_clarification_rejects_reserved_targets() -> None:
+    for target in (ClarificationTarget.ACTION_SCOPE, ClarificationTarget.ACTION_CONTENT):
+        pending = PendingClarification(
+            clarification_id=str(uuid4()),
+            created_at=now_iso(),
+            expires_at=None,
+            prompt="Reserved clarification target.",
+            target=target,
+            bound_user_request="reserved",
+            allowed_reply_kinds=["text"],
+        )
+
+        assert satisfies_clarification(pending, "anything") is False

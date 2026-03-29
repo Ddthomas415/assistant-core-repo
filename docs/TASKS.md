@@ -10,9 +10,10 @@ It answers one question:
 What should be built next in this repo, in what order, and why?
 
 Current assumed local state when this file was written:
-- current local suite passes at `78 passed`
-- recent hardening work exists locally and should be preserved intentionally
+- current local suite passes via `pytest -q`
+- exact branch, commit, and worktree state must be verified before starting a new slice
 - clarification follow-through is implemented for the currently supported ambiguous read/write flows
+- filesystem read/list guardrails are already implemented and covered by focused tests
 
 ## Working Rule
 
@@ -26,100 +27,49 @@ Each slice must:
 
 Do not mix multiple improvement themes into one slice.
 
-## Priority 0: Preserve The Current Passing State
+## Priority 0: Verify And Normalize The Local Baseline
 
 ### Objective
 
-Before starting new feature work, preserve the currently reviewed local state in git.
+Before starting new feature work, verify the local repo state and normalize it if needed.
 
 ### Why
 
-The repo has meaningful local changes:
-- session load hardening
-- cleaner CLI resume failure handling
-- confirmation route alignment
-- clarification follow-through
-- updated tests
-- updated README
+Counts drift, worktree state drifts, and local artifacts accumulate.
 
-Starting a new slice on top of an uncommitted state is how context gets lost.
+Do not assume:
+- the current test count
+- the current branch
+- the current commit
+- whether the worktree is clean
+- whether untracked root files are intentional
+
+Starting work on top of an unreviewed local state is how context gets lost.
 
 ### Done condition
 
-- the current local reviewed diff is committed
+- `pytest -q` passes
+- `bash scripts/checkpoint_core_contract.sh` passes
+- `git status --short` is reviewed
+- unintended untracked local artifacts are removed or intentionally preserved
+
+## Priority 1: Preserve The Current Passing State If It Has Local Diffs
+
+### Objective
+
+If Task 0 reveals intentional local changes, preserve them in git before starting new feature work.
+
+### Why
+
+Reviewed local changes should not remain as anonymous working-tree state.
+
+### Done condition
+
+- intentional local changes are committed
 - `pytest -q` passes
 - `bash scripts/checkpoint_core_contract.sh` passes
 
-## Priority 1: Bounded I/O Hardening
-
-### Objective
-
-Add explicit bounds to filesystem reads and workspace listing.
-
-### Why
-
-This is the most important remaining core hardening gap.
-
-Current problems:
-- `read_file_tool()` reads the full file into memory
-- `list_workspace_tool()` walks and returns the full file list
-- very large files or large workspaces can create memory pressure and poor UX
-
-This is a better next slice than routing refactors because it improves safety without changing product scope.
-
-### Scope
-
-In `src/assistant/filesystem.py`:
-- add max readable file size
-- keep preview truncation explicit
-- add max returned file count for workspace listing
-- return structured metadata when output is truncated
-
-### Tests to add
-
-In `tests/test_filesystem.py` and/or `tests/test_filesystem_boundaries.py`:
-- oversized file read returns structured failure or truncation behavior, depending on chosen contract
-- workspace listing returns bounded results when file count exceeds limit
-- truncation metadata is present and deterministic
-
-### Done condition
-
-- filesystem functions enforce explicit limits
-- tests cover the chosen limit behavior
-- full suite passes
-
-## Priority 2: CI Contract Enforcement
-
-### Objective
-
-Make CI prove the engine contract, not just the test suite.
-
-### Why
-
-Current CI in `.github/workflows/tests.yml` runs only:
-- package install
-- `pytest`
-
-But the repo already has a contract guard:
-- `scripts/checkpoint_core_contract.sh`
-
-If that script is not in CI, contract drift can still land.
-
-### Scope
-
-Update `.github/workflows/tests.yml` to also run:
-
-```bash
-bash scripts/checkpoint_core_contract.sh
-```
-
-### Done condition
-
-- CI runs pytest
-- CI runs checkpoint script
-- workflow remains green
-
-## Priority 3: Real-Use Failure Collection
+## Priority 2: Real-Use Failure Collection
 
 ### Objective
 
@@ -153,7 +103,7 @@ Examples of useful categories:
 - repeated failures are grouped
 - next work can be chosen from evidence instead of guesswork
 
-## Priority 4: Routing Expansion Only If Evidence Demands It
+## Priority 3: Routing Expansion Only If Evidence Demands It
 
 ### Objective
 
@@ -180,7 +130,7 @@ Keep this slice small if it becomes necessary:
 - the highest-frequency real routing misses are covered by tests
 - full suite passes
 
-## Priority 5: Session Schema Hardening
+## Priority 4: Session Schema Hardening
 
 ### Objective
 
@@ -220,24 +170,30 @@ A good next slice in this repo looks like this:
 - no speculative architecture
 - full suite green at the end
 
-## Recommended Immediate Next Slice
+Before changing any `RouteKind`, `PolicyOutcomeKind`, or similarly asserted enum value:
+- grep the full `tests/` tree for affected assertions first
+- update all matching assertions in the same slice
+- do not call the change complete until the old assertion pattern is gone
 
-If starting coding right now, do this next:
+## Recommended Immediate Next Step
 
-### Slice
+If continuing from the current repo state, do this next:
 
-Bounded I/O hardening in `src/assistant/filesystem.py`
+### Step
 
-### Files likely touched
+Use the assistant for real tasks and update `docs/real_use_failures.md`.
 
-- `src/assistant/filesystem.py`
-- `tests/test_filesystem.py`
-- `tests/test_filesystem_boundaries.py`
-- maybe `README.md` if user-facing tool behavior changes materially
+### Why
+
+The repo has already landed:
+- clarification follow-through for the current supported ambiguous flows
+- bounded filesystem read/list behavior
+- CI enforcement of the checkpoint contract
+
+The next useful decision should come from actual usage evidence, not another speculative hardening pass.
 
 ### Minimum expected output
 
-- explicit read-size limit
-- explicit workspace-list limit
-- deterministic structured behavior under truncation/limit conditions
-- full suite passing
+- fresh real-use examples in `docs/real_use_failures.md`
+- grouped failures by category and impact
+- one evidence-backed recommendation for the next coding slice

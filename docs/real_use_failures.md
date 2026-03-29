@@ -1,121 +1,63 @@
 # Real-Use Failure Log
 
-## Session 1 — [date]
-Tasks intended: [list what you planned to do]
+## Purpose
+
+This file tracks actual observed user-facing failures or friction.
+
+Rules:
+- keep only evidence that still matters to the current repo state
+- mark historical issues as resolved once tests and code make them obsolete
+- do not use this file for speculative architecture ideas
+
+## Current Status — 2026-03-29
+
+Current verified baseline:
+- `python3 -m pytest -q` passes
+- `bash scripts/checkpoint_core_contract.sh` passes
+
+Current behavior already covered by code and tests:
+- clarification follow-through works for the current supported ambiguous read/write flows
+- bounded file reads reject oversized files and truncate preview text in summaries
+- workspace listing is bounded and marks truncated output deterministically
+- capability/help prompts such as `what can you do?`, `help with reading`, `files?`, and `writing?` are handled directly instead of falling back to the older generic out-of-scope wording
+
+## Historical Issues Resolved
+
+These issues were real in earlier sessions but should no longer drive current roadmap decisions:
+- alternate read/list phrases that previously missed routing
+- clarification flows that acknowledged the reply but did not continue the original action
+- workspace-root handling regressions in supported read/write flows
+- older generic fallback wording for handled capability/help prompts
+
+## Current Open Evidence
+
+No new manual real-workflow session was run in this remediation pass.
+
+The remaining known product limitation from current repo evidence is:
+
+| area | current state | impact | next action |
+|---|---|---|---|
+| routing | routing remains deterministic and phrase-based; nearby unhandled phrasings may still miss | medium | collect fresh real usage before changing routing |
+| scope boundary | general assistant questions outside local file/workspace scope are answered with a scoped limitation message rather than a broad assistant answer | low | accepted unless product scope changes |
+| session schema | current validation is stronger, but future persisted fields would need explicit schema handling | low | only revisit if the session format changes |
+
+## Known v1 Limitations
+
+These are accepted architectural constraints, not open bugs.
+
+| area | behavior | impact | decision |
+|---|---|---|---|
+| `write_file_tool` | `path.write_text()` is not atomic, so a crash mid-write can corrupt the target file | low for single-user local use | accepted for v1; use tmp-then-replace only if stronger reliability is required |
+| session persistence | session save happens after engine return, so a crash between response and save can lose the last persisted turn | low | accepted for v1; the user still saw the output even if persistence lags one turn |
+
+## Next Real-Use Session Template
+
+When running a real usage pass, append entries in this format:
 
 | # | input (exact) | actual output (brief) | expected | category | impact |
 |---|---|---|---|---|---|
-| 1 | "what is todays date ?" | "I understood your request, but this minimal engine only supports the core trusted-turn flows." | answer current date | routing-miss | medium |
-| 2 | "what is the core truste ?" | "I understood your request, but this minimal engine only supports the core trusted-turn flows." | explain the assistant core / trust model | output-confusing | low |
-| 3 | "what files are in my workspace" | "I understood your request, but this minimal engine only supports the core trusted-turn flows." | list workspace files | routing-miss | high |
-| 4 | "show me the contents of notes.txt" | "I understood your request, but this minimal engine only supports the core trusted-turn flows." | read notes.txt | routing-miss | high |
-| 5 | "can you list everything in the workspace folder" | "I understood your request, but this minimal engine only supports the core trusted-turn flows." | list workspace files | routing-miss | high |
-| 6 | "open the config file" | "Which config file do you want me to use?" | ask which config file | — (passed) | — |
-| 7 | "make a file called test.py that prints hello" | "I understood your request, but this minimal engine only supports the core trusted-turn flows." | write_file action | routing-miss | high |
+| 1 | "..." | "..." | "..." | routing-miss / unclear-clarification / confirmation-friction / missing-tool / output-confusing | low / medium / high |
 
-## Result
-Completed one real-use session.
-Record all failed or confusing interactions above.
-
-
-### Post-session status
-Resolved on `feature/tool-list-workspace`:
-- #3 what files are in my workspace
-- #4 show me the contents of notes.txt
-- #5 can you list everything in the workspace folder
-- #7 make a file called test.py that prints hello
-
-Still review separately:
-- #1 what is todays date ?
-- #2 what is the core truste ?
-
-## Step 4 Conclusion
-
-High-impact failures from Session 1 are resolved on `feature/tool-list-workspace`:
-- #3 what files are in my workspace
-- #4 show me the contents of notes.txt
-- #5 can you list everything in the workspace folder
-- #7 make a file called test.py that prints hello
-
-Remaining items:
-- #1 "what is todays date ?" is outside the current repo scope and will not be added to the engine
-- #2 "what is the core truste ?" is low-impact wording noise and not worth feature work
-
-Decision:
-- Heuristic routing is sufficient for the current workflow
-- No LLM-router work is justified from this session
-
-## Session 2 — 2026-03-26
-Tasks intended: validate clarification follow-through and workspace-bound behavior after the latest main-branch changes
-
-| # | input (exact) | actual output (brief) | expected | category | impact |
-|---|---|---|---|---|---|
-| 1 | "open the config file" → "config.yaml" | "Operation failed: path is outside workspace: /Users/baitus/assistant-core-repo/config.yaml" | clarified read should resolve inside configured workspace | routing-miss | high |
-| 2 | "write the spec file" → "spec.md" → "yes" | "Please confirm overwriting spec.md with." then attempts to write path "spec.md with" outside workspace | clarified write should preserve filename and enter correct confirmation/write flow | wrong-confirmation | high |
-| 3 | "show me the contents of notes.txt" | "Operation failed: path is outside workspace: /Users/baitus/assistant-core-repo/notes.txt" | read should resolve notes.txt relative to configured workspace | routing-miss | high |
-| 4 | "make a file called test.py that prints hello" → "yes" | "Operation failed: path is outside workspace: /Users/baitus/assistant-core-repo/test.py" | write should resolve target inside configured workspace | routing-miss | high |
-| 5 | "open the config file" (after failed sequence) | "I understood your request, but this minimal engine only supports the core trusted-turn flows." | should clarify consistently | routing-miss | medium |
-
-
-## Session 2 — update after fix validation
-
-Resolved:
-- clarified write flow now preserves filename and writes inside workspace
-- workspace listing works
-- make-file flow works
-
-Not a regression:
-- reading config.yaml failed because the file does not exist in ./workspace
-- reading notes.txt failed because the file does not exist in ./workspace
-
-Still open:
-- repeating "open the config file" after the prior sequence falls back to the default answer instead of clarifying again
-
-## Session 3 — CLI visibility validation
-
-Result:
-- highlighted CLI output improves visibility for clarify/confirm/read/write/list states
-- clarification flow worked
-- workspace-root resolution worked
-- write confirmation worked
-- workspace listing worked
-- reading config.yaml failed only because the file does not exist in ./workspace
-
-Conclusion:
-- CLI visibility change is successful
-- no new routing or workspace-boundary regression observed in this session
-
-## Session 4 — 2026-03-26
-Tasks intended: probe general conversational behavior after bounded I/O hardening
-
-| # | input (exact) | actual output (brief) | expected | category | impact |
-|---|---|---|---|---|---|
-| 1 | "whats todays date?" | "I understood your request, but this minimal engine only supports the core trusted-turn flows." | answer current date or clearly state out of scope | output-confusing | medium |
-| 2 | "what is your name?" | "I understood your request, but this minimal engine only supports the core trusted-turn flows." | state assistant identity or clearly state out of scope | output-confusing | low |
-| 3 | "what can you do?" | "I understood your request, but this minimal engine only supports the core trusted-turn flows." | brief capability summary | routing-miss | medium |
-| 4 | "search for downloads path ?" | "I understood your request, but this minimal engine only supports the core trusted-turn flows." | clearly state unsupported or ask a narrower file/workspace question | output-confusing | low |
-
-
-## Session 4 — capability/help phrasing validation
-
-Tasks intended: probe natural-language variants around capabilities and local file help
-
-| # | input (exact) | actual output (brief) | expected | category | impact |
-|---|---|---|---|---|---|
-| 1 | "can can you do?" | "That request is outside my current scope..." | brief capability summary | output-confusing | low |
-| 2 | "can you code?" | "That request is outside my current scope..." | clearly state code help is out of scope or supported scope | output-confusing | low |
-| 3 | "list local file directory?" | "That request is outside my current scope..." | clearly guide toward workspace listing phrasing | output-confusing | medium |
-| 4 | "local file help?" | "That request is outside my current scope..." | brief capability/help summary | output-confusing | low |
-| 5 | "help with reading" | "That request is outside my current scope..." | brief read-file capability guidance | output-confusing | medium |
-| 6 | "files?" | "That request is outside my current scope..." | brief workspace/listing guidance | output-confusing | low |
-| 7 | "writing?" | "That request is outside my current scope..." | brief write/confirmation guidance | output-confusing | low |
-
-## Session 4 Conclusion
-
-Pattern:
-- exact handled prompts improved
-- nearby natural-language variants still fall back to the generic out-of-scope response
-
-Decision:
-- next slice should improve capability/help phrasing only
-- do not broaden architecture or routing beyond this small UX cluster
+After the table, add:
+- grouped repeated failures
+- one evidence-backed recommendation for the next coding slice

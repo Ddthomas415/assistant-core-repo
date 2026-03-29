@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from uuid import uuid4
 
 from assistant.engine import Engine
@@ -124,7 +125,7 @@ def test_stale_confirmation_returns_expired_transition_and_blocks_execution() ->
 
     result = engine.handle_turn(state, "yes")
 
-    assert result.route_decision.kind == RouteKind.CONFIRM
+    assert result.route_decision.kind == RouteKind.ANSWER
     assert result.trace.pending_transition == PendingTransitionKind.EXPIRED
     assert result.trace.tool_invoked is False
     assert state.pending_confirmation is None
@@ -178,3 +179,59 @@ def test_pending_clarification_survives_resume_and_continues(tmp_path: Path) -> 
 
     assert result2.route_decision.kind == RouteKind.TOOL
     assert result2.tool_result is not None or result2.route_decision.tool_request is not None
+
+
+def test_overwrite_single_space_routes_to_confirmation_not_clarification(
+    tmp_path: Path,
+) -> None:
+    engine = Engine(workspace_root=str(tmp_path))
+    state = make_state()
+
+    result = engine.handle_turn(state, "overwrite with defaults")
+
+    assert result.route_decision.kind == RouteKind.CONFIRM
+    assert state.pending_confirmation is not None
+    assert state.pending_confirmation.requested_action.arguments["path"] == "with defaults"
+
+
+def test_overwrite_double_space_triggers_clarification_and_reconstruct(
+    tmp_path: Path,
+) -> None:
+    engine = Engine(workspace_root=str(tmp_path))
+    state = make_state()
+
+    result1 = engine.handle_turn(state, "overwrite  with defaults")
+    assert result1.route_decision.kind == RouteKind.CLARIFY
+    assert state.pending_clarification is not None
+
+    result2 = engine.handle_turn(state, "config.yaml")
+    assert result2.route_decision.kind == RouteKind.CONFIRM
+    assert state.pending_confirmation is not None
+
+    result3 = engine.handle_turn(state, "yes")
+    assert result3.route_decision.kind == RouteKind.CONFIRM
+    assert result3.tool_result is not None
+    assert result3.tool_result.ok is True
+    assert (tmp_path / "config.yaml").read_text(encoding="utf-8") == "defaults."
+
+
+def test_empty_input_does_not_cancel_pending_confirmation() -> None:
+    engine = Engine()
+    state = make_state()
+
+    engine.handle_turn(state, "Overwrite config.yaml with defaults.")
+    assert state.pending_confirmation is not None
+
+    engine.handle_turn(state, "")
+    assert state.pending_confirmation is not None
+
+
+def test_empty_input_does_not_cancel_pending_clarification() -> None:
+    engine = Engine()
+    state = make_state()
+
+    engine.handle_turn(state, "open the config file")
+    assert state.pending_clarification is not None
+
+    engine.handle_turn(state, "")
+    assert state.pending_clarification is not None
