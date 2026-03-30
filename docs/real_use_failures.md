@@ -61,3 +61,26 @@ When running a real usage pass, append entries in this format:
 After the table, add:
 - grouped repeated failures
 - one evidence-backed recommendation for the next coding slice
+
+## Session 6 — prompt variant validation
+
+Tasks intended: probe nearby phrasing variants around help, capability, and listing prompts
+
+| # | input (exact) | actual output (brief) | expected | category | impact |
+|---|---|---|---|---|---|
+| 1 | "what is your name ?" | "That request is outside my current scope..." | brief assistant identity or clear scope statement | output-confusing | low |
+| 2 | "what is todays date ?" | "That request is outside my current scope..." | clear out-of-scope answer | output-confusing | low |
+| 3 | "list file directory ?" | "That request is outside my current scope..." | workspace-list guidance | output-confusing | medium |
+| 4 | "list files?" | "That request is outside my current scope..." | workspace-list guidance | output-confusing | medium |
+| 5 | "can can you do ?" | "That request is outside my current scope..." | capability summary | output-confusing | low |
+| 6 | "help?" | "That request is outside my current scope..." | capability/help summary | output-confusing | medium |
+
+## Session 6 Conclusion
+
+Pattern:
+- exact supported prompts work
+- nearby variants still fall back too often
+
+Decision:
+- next slice should improve small help/capability/listing phrasing variants only
+- do not broaden architecture or routing beyond this UX cluster
