@@ -277,6 +277,152 @@ class Engine:
 
         normalized = cleaned_input.lower()
 
+        if normalized in {"what can you do?", "what can you do", "help"}:
+            route_decision = RouteDecision(
+                kind=RouteKind.ANSWER,
+                answer_text=(
+                    "I can answer direct questions, read files, clarify ambiguous file requests, "
+                    "and write files after confirmation."
+                ),
+            )
+            policy_outcome = PolicyOutcome(
+                kind=PolicyOutcomeKind.ALLOW,
+                reason="Direct capability question does not require tool use.",
+            )
+            rendered_output = route_decision.answer_text
+            self._append_turn_messages(state, cleaned_input, rendered_output)
+            return EngineResult(
+                route_decision=route_decision,
+                policy_outcome=policy_outcome,
+                rendered_output=rendered_output,
+                tool_result=None,
+                trace=TurnTrace(
+                    route_kind=route_decision.kind,
+                    policy_outcome=policy_outcome.kind,
+                    tool_invoked=False,
+                    tool_execution_id=None,
+                    pending_transition=pending_transition,
+                    persistence_event="save_required",
+                    notes=notes,
+                ),
+            )
+
+        if normalized in {"show files", "list files", "show files.", "list files."}:
+            route_decision = RouteDecision(
+                kind=RouteKind.ANSWER,
+                answer_text=(
+                    "I do not support workspace listing yet. I can read a specific file if you give me a path."
+                ),
+            )
+            policy_outcome = PolicyOutcome(
+                kind=PolicyOutcomeKind.ALLOW,
+                reason="Alias handled as direct answer until list tool exists.",
+            )
+            rendered_output = route_decision.answer_text
+            self._append_turn_messages(state, cleaned_input, rendered_output)
+            return EngineResult(
+                route_decision=route_decision,
+                policy_outcome=policy_outcome,
+                rendered_output=rendered_output,
+                tool_result=None,
+                trace=TurnTrace(
+                    route_kind=route_decision.kind,
+                    policy_outcome=policy_outcome.kind,
+                    tool_invoked=False,
+                    tool_execution_id=None,
+                    pending_transition=pending_transition,
+                    persistence_event="save_required",
+                    notes=notes,
+                ),
+            )
+
+        if normalized in {"open spec", "open spec.", "read spec", "read spec."}:
+            file_path = "docs/spec-v1.md"
+            arguments = {"path": file_path}
+            if self.workspace_root is not None:
+                arguments["workspace_root"] = self.workspace_root
+
+            route_decision = RouteDecision(
+                kind=RouteKind.TOOL,
+                tool_request=ToolRequest(
+                    tool_name="read_file",
+                    arguments=arguments,
+                    user_facing_label=f"reading {file_path}",
+                ),
+            )
+            policy_outcome = PolicyOutcome(
+                kind=PolicyOutcomeKind.ALLOW,
+                reason="Spec alias maps to a read-only tool request.",
+            )
+            tool_result = self._execute_tool(route_decision.tool_request)
+            if tool_result is not None:
+                state.last_tool_execution = LastToolExecution(
+                    execution_id=tool_result.execution_id,
+                    tool_name=tool_result.tool_name,
+                    ok=tool_result.ok,
+                    summary=tool_result.summary,
+                    finished_at=tool_result.finished_at,
+                )
+                rendered_output = f"[{route_decision.tool_request.user_facing_label}...]\n{self._format_tool_summary(tool_result)}"
+            else:
+                rendered_output = "Spec read requested, but no read tool handler is configured."
+
+            self._append_turn_messages(state, cleaned_input, rendered_output)
+            return EngineResult(
+                route_decision=route_decision,
+                policy_outcome=policy_outcome,
+                rendered_output=rendered_output,
+                tool_result=tool_result,
+                trace=TurnTrace(
+                    route_kind=route_decision.kind,
+                    policy_outcome=policy_outcome.kind,
+                    tool_invoked=tool_result is not None,
+                    tool_execution_id=tool_result.execution_id if tool_result else None,
+                    pending_transition=pending_transition,
+                    persistence_event="save_required",
+                    notes=notes,
+                ),
+            )
+
+        if normalized in {"read config", "read config.", "open config", "open config"}:
+            pending = PendingClarification(
+                clarification_id=str(uuid4()),
+                created_at=now,
+                expires_at=None,
+                prompt="Which config file do you want me to use? Please provide the file path or filename.",
+                target=ClarificationTarget.FILE_PATH,
+                bound_user_request=cleaned_input,
+                allowed_reply_kinds=["file_path"],
+            )
+            state.pending_clarification = pending
+            route_decision = RouteDecision(
+                kind=RouteKind.CLARIFY,
+                clarification_prompt=pending.prompt,
+                clarification_target=pending.target,
+            )
+            policy_outcome = PolicyOutcome(
+                kind=PolicyOutcomeKind.REQUIRE_CLARIFICATION,
+                reason="Config request is ambiguous.",
+            )
+            pending_transition = PendingTransitionKind.CREATED
+            rendered_output = pending.prompt
+            self._append_turn_messages(state, cleaned_input, rendered_output)
+            return EngineResult(
+                route_decision=route_decision,
+                policy_outcome=policy_outcome,
+                rendered_output=rendered_output,
+                tool_result=None,
+                trace=TurnTrace(
+                    route_kind=route_decision.kind,
+                    policy_outcome=policy_outcome.kind,
+                    tool_invoked=False,
+                    tool_execution_id=None,
+                    pending_transition=pending_transition,
+                    persistence_event="save_required",
+                    notes=notes,
+                ),
+            )
+
         # 5. Ambiguous requests -> clarification.
         if normalized in {"open the config file.", "open the config file"}:
             pending = PendingClarification(
