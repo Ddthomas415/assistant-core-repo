@@ -312,3 +312,72 @@ def test_list_workspace_tool_ignores_hidden_and_generated_paths(tmp_path: Path) 
     assert not any(path.startswith(".assistant_sessions/") for path in result.data["files"])
     assert not any(path.startswith(".venv/") for path in result.data["files"])
     assert ".DS_Store" not in result.data["files"]
+
+
+def test_list_workspace_tool_ignores_hidden_and_generated_paths(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    (workspace / "README.md").write_text("ok", encoding="utf-8")
+    (workspace / ".DS_Store").write_text("junk", encoding="utf-8")
+
+    git_dir = workspace / ".git"
+    git_dir.mkdir()
+    (git_dir / "config").write_text("git", encoding="utf-8")
+
+    sessions = workspace / ".assistant_sessions"
+    sessions.mkdir()
+    (sessions / "one.json").write_text("{}", encoding="utf-8")
+
+    venv = workspace / ".venv"
+    venv.mkdir()
+    (venv / "pyvenv.cfg").write_text("venv", encoding="utf-8")
+
+    request = ToolRequest(
+        tool_name="list_workspace",
+        arguments={"workspace_root": str(workspace)},
+        user_facing_label="listing workspace",
+    )
+
+    result = list_workspace_tool(request)
+
+    assert result.ok is True
+    assert "README.md" in result.data["files"]
+    assert not any(path.startswith(".git/") for path in result.data["files"])
+    assert not any(path.startswith(".assistant_sessions/") for path in result.data["files"])
+    assert not any(path.startswith(".venv/") for path in result.data["files"])
+    assert ".DS_Store" not in result.data["files"]
+
+
+def test_list_workspace_tool_ignores_cache_and_generated_paths(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    (workspace / "README.md").write_text("ok", encoding="utf-8")
+
+    pytest_cache = workspace / ".pytest_cache"
+    pytest_cache.mkdir()
+    (pytest_cache / "README.md").write_text("cache", encoding="utf-8")
+
+    egg_info = workspace / "demo.egg-info"
+    egg_info.mkdir()
+    (egg_info / "PKG-INFO").write_text("pkg", encoding="utf-8")
+
+    github = workspace / ".github"
+    workflows = github / "workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "tests.yml").write_text("name: tests", encoding="utf-8")
+
+    request = ToolRequest(
+        tool_name="list_workspace",
+        arguments={"workspace_root": str(workspace)},
+        user_facing_label="listing workspace",
+    )
+
+    result = list_workspace_tool(request)
+
+    assert result.ok is True
+    assert "README.md" in result.data["files"]
+    assert not any(path.startswith(".pytest_cache/") for path in result.data["files"])
+    assert not any(path.endswith(".egg-info/PKG-INFO") or ".egg-info/" in path for path in result.data["files"])
+    assert not any(path.startswith(".github/") for path in result.data["files"])

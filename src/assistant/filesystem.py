@@ -105,11 +105,17 @@ def _should_ignore_suggestion_path(relative_path: str) -> bool:
         ".assistant_sessions",
         ".assistant_sessions_demo",
         "__pycache__",
+        ".pytest_cache",
+        ".github",
     }
     ignored_filenames = {
         ".DS_Store",
     }
-    return any(part in ignored_prefixes for part in parts) or parts[-1] in ignored_filenames
+    return (
+        any(part in ignored_prefixes for part in parts)
+        or any(part.endswith(".egg-info") for part in parts)
+        or parts[-1] in ignored_filenames
+    )
 
 
 def _find_nearby_workspace_matches(
