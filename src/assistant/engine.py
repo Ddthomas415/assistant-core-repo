@@ -526,6 +526,43 @@ class Engine:
             )
 
         # 7. Read-only tool path.
+        if normalized in {"read file", "read a file"}:
+            state.pending_clarification = PendingClarification(
+                clarification_id=str(uuid4()),
+                created_at=now,
+                expires_at=None,
+                prompt="Which file do you want me to read?",
+                target=ClarificationTarget.FILE_PATH,
+                bound_user_request=cleaned_input,
+                allowed_reply_kinds=["file_path"],
+            )
+            route_decision = RouteDecision(
+                kind=RouteKind.CLARIFY,
+                clarification_prompt="Which file do you want me to read?",
+                clarification_target=ClarificationTarget.FILE_PATH,
+            )
+            policy_outcome = PolicyOutcome(
+                kind=PolicyOutcomeKind.REQUIRE_CLARIFICATION,
+                reason="Requested read target is ambiguous.",
+            )
+            rendered_output = "Which file do you want me to read?"
+            self._append_turn_messages(state, cleaned_input, rendered_output)
+            return EngineResult(
+                route_decision=route_decision,
+                policy_outcome=policy_outcome,
+                rendered_output=rendered_output,
+                tool_result=None,
+                trace=TurnTrace(
+                    route_kind=route_decision.kind,
+                    policy_outcome=policy_outcome.kind,
+                    tool_invoked=False,
+                    tool_execution_id=None,
+                    pending_transition=PendingTransitionKind.CREATED,
+                    persistence_event="save_required",
+                    notes=notes,
+                ),
+            )
+
         if normalized.startswith("read "):
             file_path = cleaned_input[len("read ") :].strip()
             arguments = {"path": file_path}
@@ -689,13 +726,14 @@ class Engine:
                 "ask clarifying questions when requests are ambiguous, and resume sessions."
             )
 
-        if normalized in {"help with reading", "local file help?"}:
+        if normalized in {"help with reading", "local file help?", "help me with local files"}:
             return (
-                "I can help read local files in the workspace. Try requests like "
-                "'read notes.txt' or 'show me the contents of notes.txt'."
+                "I can help with local files in the workspace. Try reading files like "
+                "'read notes.txt' or 'show me the contents of notes.txt', writing files with confirmation, "
+                "or listing files in the workspace."
             )
 
-        if normalized in {"files?", "list files?", "list local file directory?", "list file directory ?"}:
+        if normalized in {"files?", "list files?", "list files", "list local file directory?", "list file directory ?", "list all workspace file"}:
             return (
                 "I can list files in the workspace. Try requests like "
                 "'what files are in my workspace' or 'can you list everything in the workspace folder'."
