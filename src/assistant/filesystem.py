@@ -97,7 +97,6 @@ def _resolve_target_path(
         )
 
 
-
 def _find_nearby_workspace_matches(workspace_root: Path, requested_path: Path) -> list[str]:
     requested_name = requested_path.name
     if not requested_name:

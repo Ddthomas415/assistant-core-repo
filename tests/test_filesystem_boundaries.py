@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from assistant.filesystem import read_file_tool, write_file_tool
+from assistant.filesystem import list_workspace_tool, read_file_tool, write_file_tool
 from assistant.models import ToolRequest
 
 
@@ -138,3 +138,44 @@ def test_read_file_tool_missing_file_without_workspace_has_no_suggestions(tmp_pa
     assert result.error_code == "file_not_found"
     assert "did you mean" not in result.summary.lower()
     assert result.data["suggestions"] == []
+
+
+def test_list_workspace_tool_returns_recursive_files(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "a.txt").write_text("a", encoding="utf-8")
+    sub = workspace / "sub"
+    sub.mkdir()
+    (sub / "b.txt").write_text("b", encoding="utf-8")
+
+    request = ToolRequest(
+        tool_name="list_workspace",
+        arguments={"workspace_root": str(workspace)},
+        user_facing_label="listing workspace",
+    )
+
+    result = list_workspace_tool(request)
+
+    assert result.ok is True
+    assert result.data["files"] == ["a.txt", "sub/b.txt"]
+    assert result.data["truncated"] is False
+    assert "Workspace files:" in result.summary
+
+
+def test_list_workspace_tool_reports_recursive_file_count_via_data(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "a.txt").write_text("a", encoding="utf-8")
+    (workspace / "b.txt").write_text("b", encoding="utf-8")
+
+    request = ToolRequest(
+        tool_name="list_workspace",
+        arguments={"workspace_root": str(workspace)},
+        user_facing_label="listing workspace",
+    )
+
+    result = list_workspace_tool(request)
+
+    assert result.ok is True
+    assert len(result.data["files"]) == 2
+    assert result.data["truncated"] is False
