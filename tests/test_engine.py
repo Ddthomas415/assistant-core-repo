@@ -1095,3 +1095,48 @@ def test_show_me_contents_without_workspace_root_returns_guidance() -> None:
 
     assert result.route_decision.kind == RouteKind.ANSWER
     assert "workspace root" in result.rendered_output.lower()
+
+
+def test_open_settings_reads_existing_yaml_settings_file(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "settings.yaml").write_text("debug: true", encoding="utf-8")
+
+    engine = Engine(workspace_root=str(workspace))
+    state = make_state()
+
+    result = engine.handle_turn(state, "open settings")
+
+    assert result.route_decision.kind == RouteKind.TOOL
+    assert result.tool_result is not None
+    assert result.tool_result.ok is True
+    assert "debug: true" in result.rendered_output.lower()
+
+
+def test_open_settings_prefers_existing_candidate_over_missing_default(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "settings.json").write_text('{"debug": true}', encoding="utf-8")
+
+    engine = Engine(workspace_root=str(workspace))
+    state = make_state()
+
+    result = engine.handle_turn(state, "open settings")
+
+    assert result.route_decision.kind == RouteKind.TOOL
+    assert result.tool_result is not None
+    assert result.tool_result.ok is True
+    assert '"debug": true' in result.rendered_output.lower()
+
+
+def test_multiline_input_returns_clear_single_command_message(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    engine = Engine(workspace_root=str(workspace))
+    state = make_state()
+
+    result = engine.handle_turn(state, "open readme\nread config")
+
+    assert result.route_decision.kind == RouteKind.ANSWER
+    assert "one command at a time" in result.rendered_output.lower()
