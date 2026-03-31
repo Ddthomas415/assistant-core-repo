@@ -51,8 +51,12 @@ def main() -> None:
     print(f"Session: {state.session_id}")
     if args.workspace_root:
         print(f"Workspace root: {args.workspace_root}")
+    else:
+        print("Workspace root: not set")
     print("Assistant ready. Type 'exit' or 'quit' to stop.")
-    print("Examples: 'read spec.md', 'open the config file', 'overwrite notes.txt with hello'.")
+    print("Reads are workspace-scoped when a workspace root is configured.")
+    print("Writes require confirmation.")
+    print("Examples: show files | read README.md | open settings | read config")
 
     while True:
         try:
