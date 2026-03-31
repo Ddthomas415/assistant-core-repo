@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from datetime import datetime, timezone
 from typing import Callable
 from uuid import uuid4
@@ -236,6 +237,32 @@ class Engine:
         )
 
 
+
+    def _find_config_candidates(self) -> list[str]:
+        if self.workspace_root is None:
+            return []
+
+        workspace = Path(self.workspace_root).expanduser().resolve(strict=False)
+        candidate_names = {
+            "config.yaml",
+            "config.yml",
+            "config.toml",
+            "config.json",
+            "settings.yaml",
+            "settings.yml",
+            "settings.toml",
+            "settings.json",
+        }
+
+        found: list[str] = []
+        for name in sorted(candidate_names):
+            candidate = workspace / name
+            if candidate.is_file():
+                found.append(name)
+
+        return found
+
+
     def _format_tool_summary(self, tool_result: ToolResult) -> str:
         if tool_result.ok:
             return tool_result.summary
@@ -446,11 +473,70 @@ class Engine:
             )
 
         if normalized in {"read config", "read config.", "open config", "open config"}:
+            config_candidates = self._find_config_candidates()
+
+            if len(config_candidates) == 1:
+                file_path = config_candidates[0]
+                arguments = {"path": file_path}
+                if self.workspace_root is not None:
+                    arguments["workspace_root"] = self.workspace_root
+
+                route_decision = RouteDecision(
+                    kind=RouteKind.TOOL,
+                    tool_request=ToolRequest(
+                        tool_name="read_file",
+                        arguments=arguments,
+                        user_facing_label=f"reading {file_path}",
+                    ),
+                )
+                policy_outcome = PolicyOutcome(
+                    kind=PolicyOutcomeKind.ALLOW,
+                    reason="Single obvious config file found in workspace.",
+                )
+                tool_result = self._execute_tool(route_decision.tool_request)
+                if tool_result is not None:
+                    state.last_tool_execution = LastToolExecution(
+                        execution_id=tool_result.execution_id,
+                        tool_name=tool_result.tool_name,
+                        ok=tool_result.ok,
+                        summary=tool_result.summary,
+                        finished_at=tool_result.finished_at,
+                    )
+                    rendered_output = f"[{route_decision.tool_request.user_facing_label}...]\n{self._format_tool_summary(tool_result)}"
+                else:
+                    rendered_output = "Config read requested, but no read tool handler is configured."
+
+                self._append_turn_messages(state, cleaned_input, rendered_output)
+                return EngineResult(
+                    route_decision=route_decision,
+                    policy_outcome=policy_outcome,
+                    rendered_output=rendered_output,
+                    tool_result=tool_result,
+                    trace=TurnTrace(
+                        route_kind=route_decision.kind,
+                        policy_outcome=policy_outcome.kind,
+                        tool_invoked=tool_result is not None,
+                        tool_execution_id=tool_result.execution_id if tool_result else None,
+                        pending_transition=pending_transition,
+                        persistence_event="save_required",
+                        notes=notes,
+                    ),
+                )
+
+            if len(config_candidates) > 1:
+                choices = ", ".join(config_candidates)
+                prompt = (
+                    "I found multiple config files. Which one do you want me to use? "
+                    f"Choices: {choices}"
+                )
+            else:
+                prompt = "Which config file do you want me to use? Please provide the file path or filename."
+
             pending = PendingClarification(
                 clarification_id=str(uuid4()),
                 created_at=now,
                 expires_at=None,
-                prompt="Which config file do you want me to use? Please provide the file path or filename.",
+                prompt=prompt,
                 target=ClarificationTarget.FILE_PATH,
                 bound_user_request=cleaned_input,
                 allowed_reply_kinds=["file_path"],

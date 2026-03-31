@@ -599,3 +599,55 @@ def test_cli_open_readme_reads_workspace_readme(tmp_path: Path) -> None:
     )
 
     assert "workspace readme" in result.stdout.lower()
+
+
+def test_cli_read_config_reads_single_obvious_config_file(tmp_path: Path) -> None:
+    session_dir = tmp_path / "sessions"
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    (workspace_root / "config.yaml").write_text("name: demo", encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "assistant.cli",
+            "--session-dir",
+            str(session_dir),
+            "--workspace-root",
+            str(workspace_root),
+        ],
+        input="read config\nexit\n",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert "name: demo" in result.stdout.lower()
+
+
+def test_cli_read_config_with_multiple_candidates_shows_choices(tmp_path: Path) -> None:
+    session_dir = tmp_path / "sessions"
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    (workspace_root / "config.yaml").write_text("a", encoding="utf-8")
+    (workspace_root / "settings.toml").write_text("b", encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "assistant.cli",
+            "--session-dir",
+            str(session_dir),
+            "--workspace-root",
+            str(workspace_root),
+        ],
+        input="read config\nexit\n",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert "config.yaml" in result.stdout
+    assert "settings.toml" in result.stdout

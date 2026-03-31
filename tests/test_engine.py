@@ -892,3 +892,53 @@ def test_read_readme_missing_returns_structured_failure(tmp_path) -> None:
     assert result.tool_result.ok is False
     assert result.tool_result.error_code == "file_not_found"
     assert "readme.md" in result.rendered_output.lower()
+
+
+def test_read_config_reads_single_obvious_config_file(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "config.yaml").write_text("name: demo", encoding="utf-8")
+
+    engine = Engine(workspace_root=str(workspace))
+    state = make_state()
+
+    result = engine.handle_turn(state, "read config")
+
+    assert result.route_decision.kind == RouteKind.TOOL
+    assert result.tool_result is not None
+    assert result.tool_result.ok is True
+    assert "name: demo" in result.rendered_output.lower()
+
+
+def test_read_config_with_multiple_candidates_requires_clarification(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "config.yaml").write_text("a", encoding="utf-8")
+    (workspace / "settings.toml").write_text("b", encoding="utf-8")
+
+    engine = Engine(workspace_root=str(workspace))
+    state = make_state()
+
+    result = engine.handle_turn(state, "read config")
+
+    assert result.route_decision.kind == RouteKind.CLARIFY
+    assert result.policy_outcome.kind.value == "require_clarification"
+    assert state.pending_clarification is not None
+    assert "config.yaml" in result.rendered_output
+    assert "settings.toml" in result.rendered_output
+
+
+def test_read_config_with_no_candidates_keeps_safe_clarification(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "notes.txt").write_text("hello", encoding="utf-8")
+
+    engine = Engine(workspace_root=str(workspace))
+    state = make_state()
+
+    result = engine.handle_turn(state, "read config")
+
+    assert result.route_decision.kind == RouteKind.CLARIFY
+    assert result.policy_outcome.kind.value == "require_clarification"
+    assert state.pending_clarification is not None
+    assert "which config file" in result.rendered_output.lower()
