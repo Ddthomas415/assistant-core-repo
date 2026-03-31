@@ -574,3 +574,28 @@ def test_cli_malformed_overwrite_requests_clearer_prompt(tmp_path: Path) -> None
     stdout = result.stdout.lower()
     assert "which file do you want me to overwrite?" in stdout
     assert "target file path" in stdout
+
+
+def test_cli_open_readme_reads_workspace_readme(tmp_path: Path) -> None:
+    session_dir = tmp_path / "sessions"
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    (workspace_root / "README.md").write_text("workspace readme", encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "assistant.cli",
+            "--session-dir",
+            str(session_dir),
+            "--workspace-root",
+            str(workspace_root),
+        ],
+        input="open readme\nexit\n",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert "workspace readme" in result.stdout.lower()

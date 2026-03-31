@@ -859,3 +859,36 @@ def test_engine_read_missing_file_inside_workspace_suggests_nearby_match(tmp_pat
     assert result.tool_result.ok is False
     assert result.tool_result.error_code == "file_not_found"
     assert "config.yaml" in result.rendered_output
+
+
+def test_open_readme_maps_to_read_tool(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    readme = workspace / "README.md"
+    readme.write_text("hello readme", encoding="utf-8")
+
+    engine = Engine(workspace_root=str(workspace))
+    state = make_state()
+
+    result = engine.handle_turn(state, "open readme")
+
+    assert result.route_decision.kind == RouteKind.TOOL
+    assert result.tool_result is not None
+    assert result.tool_result.ok is True
+    assert "hello readme" in result.rendered_output.lower()
+
+
+def test_read_readme_missing_returns_structured_failure(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    engine = Engine(workspace_root=str(workspace))
+    state = make_state()
+
+    result = engine.handle_turn(state, "read readme")
+
+    assert result.route_decision.kind == RouteKind.TOOL
+    assert result.tool_result is not None
+    assert result.tool_result.ok is False
+    assert result.tool_result.error_code == "file_not_found"
+    assert "readme.md" in result.rendered_output.lower()
