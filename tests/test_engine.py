@@ -745,3 +745,26 @@ def test_engine_routes_workspace_listing_question_variant() -> None:
     assert result.route_decision.kind == RouteKind.TOOL
     assert result.route_decision.tool_request is not None
     assert result.route_decision.tool_request.tool_name == "list_workspace"
+
+def test_engine_answers_list_folders_variant_with_workspace_guidance() -> None:
+    engine = Engine()
+    state = make_state()
+
+    result = engine.handle_turn(state, "list folders?")
+
+    assert result.route_decision.kind == RouteKind.ANSWER
+    text = result.rendered_output.lower()
+    assert "workspace" in text or "list" in text or "folder" in text
+    assert "outside my current scope" not in text
+
+
+def test_engine_answers_directory_variant_with_workspace_guidance() -> None:
+    engine = Engine()
+    state = make_state()
+
+    result = engine.handle_turn(state, "directory")
+
+    assert result.route_decision.kind == RouteKind.ANSWER
+    text = result.rendered_output.lower()
+    assert "workspace" in text or "list" in text or "folder" in text
+    assert "outside my current scope" not in text

@@ -739,7 +739,17 @@ class Engine:
                 "or listing files in the workspace."
             )
 
-        if normalized in {"files?", "list files?", "list files", "list local file directory?", "list file directory ?", "list all workspace file"}:
+        if normalized in {
+            "files?",
+            "list files?",
+            "list files",
+            "list local file directory?",
+            "list file directory ?",
+            "list all workspace file",
+            "list folders?",
+            "folders",
+            "directory",
+        }:
             return (
                 "I can list files in the workspace. Try requests like "
                 "'what files are in my workspace' or 'can you list everything in the workspace folder'."
