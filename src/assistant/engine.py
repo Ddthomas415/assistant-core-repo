@@ -683,7 +683,7 @@ class Engine:
                 "use workspace tools when needed, clarify ambiguity, and confirm modifying actions."
             )
 
-        if normalized in {"what can you do?", "what can you do", "help"}:
+        if normalized in {"what can you do?", "what can you do", "help", "help?", "can can you do ?", "can can you do?"}:
             return (
                 "I can read files, write files with confirmation, list workspace files, "
                 "ask clarifying questions when requests are ambiguous, and resume sessions."
@@ -695,7 +695,7 @@ class Engine:
                 "'read notes.txt' or 'show me the contents of notes.txt'."
             )
 
-        if normalized in {"files?", "list local file directory?"}:
+        if normalized in {"files?", "list files?", "list local file directory?", "list file directory ?"}:
             return (
                 "I can list files in the workspace. Try requests like "
                 "'what files are in my workspace' or 'can you list everything in the workspace folder'."
