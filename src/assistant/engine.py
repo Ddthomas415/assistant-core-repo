@@ -447,12 +447,43 @@ class Engine:
                 kind=RouteKind.ANSWER,
                 answer_text=(
                     "I can answer direct questions, read files, clarify ambiguous file requests, "
-                    "and write files after confirmation."
+                    "and write files after confirmation. Try commands like 'show files', "
+                    "'read README.md', 'open settings', or 'read config'."
                 ),
             )
             policy_outcome = PolicyOutcome(
                 kind=PolicyOutcomeKind.ALLOW,
                 reason="Direct capability question does not require tool use.",
+            )
+            rendered_output = route_decision.answer_text
+            self._append_turn_messages(state, cleaned_input, rendered_output)
+            return EngineResult(
+                route_decision=route_decision,
+                policy_outcome=policy_outcome,
+                rendered_output=rendered_output,
+                tool_result=None,
+                trace=TurnTrace(
+                    route_kind=route_decision.kind,
+                    policy_outcome=policy_outcome.kind,
+                    tool_invoked=False,
+                    tool_execution_id=None,
+                    pending_transition=pending_transition,
+                    persistence_event="save_required",
+                    notes=notes,
+                ),
+            )
+
+        if normalized in {"what files can you read?", "what files can you read"}:
+            route_decision = RouteDecision(
+                kind=RouteKind.ANSWER,
+                answer_text=(
+                    "I can read files inside the workspace root you started me with. "
+                    "Try commands like 'read README.md', 'open settings', or 'show files'."
+                ),
+            )
+            policy_outcome = PolicyOutcome(
+                kind=PolicyOutcomeKind.ALLOW,
+                reason="Capability discovery question does not require tool use.",
             )
             rendered_output = route_decision.answer_text
             self._append_turn_messages(state, cleaned_input, rendered_output)
@@ -674,6 +705,9 @@ class Engine:
                 ),
             )
 
+
+        if normalized in {"settings", "settings."}:
+            normalized = "open settings"
 
         if normalized in {
             "open settings",

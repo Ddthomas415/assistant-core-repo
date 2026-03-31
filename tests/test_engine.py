@@ -1183,3 +1183,46 @@ def test_open_settings_without_settings_files_fails_cleanly(tmp_path) -> None:
     assert result.tool_result.error_code == "file_not_found"
     assert "settings.toml" in result.rendered_output.lower()
     assert "pyproject.toml" not in result.rendered_output.lower()
+
+
+def test_what_files_can_you_read_returns_capability_guidance() -> None:
+    engine = Engine()
+    state = make_state()
+
+    result = engine.handle_turn(state, "what files can you read?")
+
+    assert result.route_decision.kind == RouteKind.ANSWER
+    text = result.rendered_output.lower()
+    assert "workspace" in text
+    assert "read readme.md" in text
+    assert "show files" in text
+
+
+def test_settings_routes_like_open_settings(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "settings.yaml").write_text("debug: true", encoding="utf-8")
+
+    engine = Engine(workspace_root=str(workspace))
+    state = make_state()
+
+    result = engine.handle_turn(state, "settings")
+
+    assert result.route_decision.kind == RouteKind.TOOL
+    assert result.tool_result is not None
+    assert result.tool_result.ok is True
+    assert "debug: true" in result.rendered_output.lower()
+
+
+def test_help_answer_mentions_concrete_commands() -> None:
+    engine = Engine()
+    state = make_state()
+
+    result = engine.handle_turn(state, "help")
+
+    assert result.route_decision.kind == RouteKind.ANSWER
+    text = result.rendered_output.lower()
+    assert "show files" in text
+    assert "read readme.md" in text
+    assert "open settings" in text
+    assert "read config" in text
