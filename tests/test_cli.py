@@ -478,3 +478,99 @@ def test_cli_resume_preserves_pending_clarification(tmp_path: Path) -> None:
     assert "[reading]" in stdout or "[reading " in stdout
     assert "config.yaml" in stdout
     assert "name: demo" in stdout
+
+
+def test_cli_help_text_is_clear() -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "assistant.cli",
+            "--help",
+        ],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    stdout = result.stdout.lower()
+    assert "terminal-first assistant" in stdout
+    assert "session state" in stdout
+    assert "workspace root" in stdout
+
+
+def test_cli_startup_prints_examples(tmp_path: Path) -> None:
+    session_dir = tmp_path / "sessions"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "assistant.cli",
+            "--session-dir",
+            str(session_dir),
+        ],
+        input="exit\n",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    stdout = result.stdout.lower()
+    assert "examples:" in stdout
+    assert "read spec.md" in stdout
+
+
+def test_cli_read_outside_workspace_gives_clearer_guidance(tmp_path: Path) -> None:
+    session_dir = tmp_path / "sessions"
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+
+    outside = tmp_path / "outside.txt"
+    outside.write_text("secret", encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "assistant.cli",
+            "--session-dir",
+            str(session_dir),
+            "--workspace-root",
+            str(workspace_root),
+        ],
+        input=f"Read {outside}\nexit\n",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    stdout = result.stdout.lower()
+    assert "outside the allowed workspace root" in stdout
+    assert "--workspace-root" in stdout
+
+
+def test_cli_malformed_overwrite_requests_clearer_prompt(tmp_path: Path) -> None:
+    session_dir = tmp_path / "sessions"
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "assistant.cli",
+            "--session-dir",
+            str(session_dir),
+            "--workspace-root",
+            str(workspace_root),
+        ],
+        input="Overwrite  with hello\nexit\n",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    stdout = result.stdout.lower()
+    assert "which file do you want me to overwrite?" in stdout
+    assert "target file path" in stdout

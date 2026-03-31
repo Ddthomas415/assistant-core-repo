@@ -171,7 +171,7 @@ class Engine:
                         summary=tool_result.summary,
                         finished_at=tool_result.finished_at,
                     )
-                    rendered_output = f"[{tool_request.user_facing_label}...]\n{tool_result.summary}"
+                    rendered_output = f"[{tool_request.user_facing_label}...]\n{self._format_tool_summary(tool_result)}"
                 else:
                     rendered_output = "Confirmed, but no tool handler is configured."
 
@@ -235,6 +235,29 @@ class Engine:
             notes=notes,
         )
 
+
+    def _format_tool_summary(self, tool_result: ToolResult) -> str:
+        if tool_result.ok:
+            return tool_result.summary
+
+        if tool_result.error_code == "file_not_found":
+            path = tool_result.data.get("path") if tool_result.data else None
+            if path:
+                return f"{tool_result.summary}\nHint: check the path and try again."
+            return f"{tool_result.summary}\nHint: check the path and try again."
+
+        if tool_result.error_code == "path_outside_workspace":
+            return (
+                f"{tool_result.summary}\n"
+                "This path is outside the allowed workspace root. "
+                "Use a file inside the workspace or restart with a different --workspace-root."
+            )
+
+        if tool_result.error_code == "invalid_path":
+            return f"{tool_result.summary}\nPlease provide a valid file path."
+
+        return tool_result.summary
+
     def _append_turn_messages(self, state: SessionState, user_input: str, output: str) -> None:
         state.messages.append(Message(role=Role.USER, content=user_input))
         state.messages.append(Message(role=Role.ASSISTANT, content=output))
@@ -260,7 +283,7 @@ class Engine:
                 clarification_id=str(uuid4()),
                 created_at=now,
                 expires_at=None,
-                prompt="Which config file do you want me to use?",
+                prompt="Which config file do you want me to use? Please provide the file path or filename.",
                 target=ClarificationTarget.FILE_PATH,
                 bound_user_request=cleaned_input,
                 allowed_reply_kinds=["file_path"],
@@ -302,21 +325,21 @@ class Engine:
                     clarification_id=str(uuid4()),
                     created_at=now,
                     expires_at=None,
-                    prompt="Which file do you want me to overwrite?",
+                    prompt="Which file do you want me to overwrite? Please name the target file path.",
                     target=ClarificationTarget.FILE_PATH,
                     bound_user_request=cleaned_input,
                     allowed_reply_kinds=["file_path"],
                 )
                 route_decision = RouteDecision(
                     kind=RouteKind.CLARIFY,
-                    clarification_prompt="Which file do you want me to overwrite?",
+                    clarification_prompt="Which file do you want me to overwrite? Please name the target file path.",
                     clarification_target=ClarificationTarget.FILE_PATH,
                 )
                 policy_outcome = PolicyOutcome(
                     kind=PolicyOutcomeKind.REQUIRE_CLARIFICATION,
                     reason="Modifying request is missing a valid target path.",
                 )
-                rendered_output = "Which file do you want me to overwrite?"
+                rendered_output = "Which file do you want me to overwrite? Please name the target file path."
                 self._append_turn_messages(state, message_input, rendered_output)
                 return EngineResult(
                     route_decision=route_decision,
@@ -453,7 +476,7 @@ class Engine:
                     summary=tool_result.summary,
                     finished_at=tool_result.finished_at,
                 )
-                rendered_output = f"[{route_decision.tool_request.user_facing_label}...]\n{tool_result.summary}"
+                rendered_output = f"[{route_decision.tool_request.user_facing_label}...]\n{self._format_tool_summary(tool_result)}"
             else:
                 rendered_output = "Read requested, but no read tool handler is configured."
 
@@ -507,7 +530,7 @@ class Engine:
                     summary=tool_result.summary,
                     finished_at=tool_result.finished_at,
                 )
-                rendered_output = f"[{route_decision.tool_request.user_facing_label}...]\n{tool_result.summary}"
+                rendered_output = f"[{route_decision.tool_request.user_facing_label}...]\n{self._format_tool_summary(tool_result)}"
             else:
                 rendered_output = "Workspace listing requested, but no tool handler is configured."
 
@@ -593,7 +616,7 @@ class Engine:
                     summary=tool_result.summary,
                     finished_at=tool_result.finished_at,
                 )
-                rendered_output = f"[{route_decision.tool_request.user_facing_label}...]\n{tool_result.summary}"
+                rendered_output = f"[{route_decision.tool_request.user_facing_label}...]\n{self._format_tool_summary(tool_result)}"
             else:
                 rendered_output = "Read requested, but no read tool handler is configured."
 

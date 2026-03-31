@@ -4,40 +4,26 @@ import argparse
 from pathlib import Path
 
 from assistant.engine import Engine
-from assistant.session import SessionCorruptError, SessionNotFoundError, SessionStore
-
-def format_rendered_output(text: str) -> str:
-    lower = text.lower()
-    if lower.startswith('[reading '):
-        return f'[READING]\n{text}'
-    if lower.startswith('[writing '):
-        return f'[WRITING]\n{text}'
-    if lower.startswith('[listing '):
-        return f'[LISTING]\n{text}'
-    if lower.startswith('please confirm '):
-        return f'[CONFIRM]\n{text}'
-    if lower.startswith('which ') or lower.startswith('what filename '):
-        return f'[CLARIFY]\n{text}'
-    if 'failed:' in lower or lower.startswith('operation failed:'):
-        return f'[ERROR]\n{text}'
-    return text
+from assistant.session import SessionNotFoundError, SessionStore
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Terminal-first private assistant core")
+    parser = argparse.ArgumentParser(
+        description="Terminal-first assistant for safe local workspace tasks."
+    )
     parser.add_argument(
         "--session-dir",
         default=".assistant_sessions",
-        help="Directory for session files",
+        help="Directory where session state is stored.",
     )
     parser.add_argument(
         "--resume",
-        help="Resume a previous session by session ID",
+        help="Resume a previously saved session by session ID.",
     )
     parser.add_argument(
         "--workspace-root",
         default=None,
-        help="Optional workspace root used for filesystem boundary validation",
+        help="Optional workspace root that bounds read/write access.",
     )
     return parser
 
@@ -51,8 +37,8 @@ def main() -> None:
     if args.resume:
         try:
             state = store.load(args.resume)
-        except (SessionNotFoundError, SessionCorruptError) as exc:
-            raise SystemExit(f"Resume failed: {exc}")
+        except SessionNotFoundError as exc:
+            raise SystemExit(str(exc))
     else:
         state = store.create()
 
@@ -64,6 +50,7 @@ def main() -> None:
     if args.workspace_root:
         print(f"Workspace root: {args.workspace_root}")
     print("Assistant ready. Type 'exit' or 'quit' to stop.")
+    print("Examples: 'read spec.md', 'open the config file', 'overwrite notes.txt with hello'.")
 
     while True:
         try:
@@ -71,15 +58,12 @@ def main() -> None:
         except EOFError:
             print()
             break
-        except KeyboardInterrupt:
-            print()
-            break
 
         if user_input.strip().lower() in {"exit", "quit"}:
             break
 
         result = engine.handle_turn(state, user_input)
-        print(format_rendered_output(result.rendered_output))
+        print(result.rendered_output)
         store.save(state)
 
 
