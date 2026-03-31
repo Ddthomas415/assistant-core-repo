@@ -518,7 +518,7 @@ def test_cli_startup_prints_examples(tmp_path: Path) -> None:
 
     stdout = result.stdout.lower()
     assert "examples:" in stdout
-    assert "read spec.md" in stdout
+    assert "read readme.md" in stdout
 
 
 def test_cli_read_outside_workspace_gives_clearer_guidance(tmp_path: Path) -> None:
@@ -807,3 +807,52 @@ def test_cli_settings_routes_to_settings_alias(tmp_path: Path) -> None:
     )
 
     assert "debug: true" in result.stdout.lower()
+
+
+def test_cli_startup_shows_workspace_and_write_policy(tmp_path: Path) -> None:
+    session_dir = tmp_path / "sessions"
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "assistant.cli",
+            "--session-dir",
+            str(session_dir),
+            "--workspace-root",
+            str(workspace_root),
+        ],
+        input="exit\n",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    stdout = result.stdout.lower()
+    assert "workspace root:" in stdout
+    assert str(workspace_root).lower() in stdout
+    assert "writes require confirmation" in stdout
+
+
+def test_cli_startup_without_workspace_shows_no_workspace_message(tmp_path: Path) -> None:
+    session_dir = tmp_path / "sessions"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "assistant.cli",
+            "--session-dir",
+            str(session_dir),
+        ],
+        input="exit\n",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    stdout = result.stdout.lower()
+    assert "workspace root: not set" in stdout
+    assert "writes require confirmation" in stdout

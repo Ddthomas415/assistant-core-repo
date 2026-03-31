@@ -446,9 +446,10 @@ class Engine:
             route_decision = RouteDecision(
                 kind=RouteKind.ANSWER,
                 answer_text=(
-                    "I can answer direct questions, read files, clarify ambiguous file requests, "
-                    "and write files after confirmation. Try commands like 'show files', "
-                    "'read README.md', 'open settings', or 'read config'."
+                    "I can answer direct questions and work inside the current workspace root. "
+                    "I can list files, read files, clarify ambiguous requests, and write files after confirmation. "
+                    "Try commands like 'show files', 'read README.md', 'open settings', or 'read config'. "
+                    "Writes require confirmation before I change files."
                 ),
             )
             policy_outcome = PolicyOutcome(

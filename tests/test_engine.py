@@ -1262,3 +1262,18 @@ def test_settings_without_settings_files_does_not_suggest_unrelated_files(tmp_pa
     assert result.tool_result.error_code == "file_not_found"
     assert "settings.toml" in result.rendered_output.lower()
     assert "pyproject.toml" not in result.rendered_output.lower()
+
+
+def test_help_mentions_workspace_and_write_confirmation() -> None:
+    engine = Engine()
+    state = make_state()
+
+    result = engine.handle_turn(state, "help")
+
+    assert result.route_decision.kind == RouteKind.ANSWER
+    text = result.rendered_output.lower()
+    assert "show files" in text
+    assert "read readme.md" in text
+    assert "open settings" in text
+    assert "read config" in text
+    assert "confirmation" in text
