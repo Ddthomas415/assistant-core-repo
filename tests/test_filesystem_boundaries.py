@@ -218,3 +218,62 @@ def test_list_workspace_tool_empty_summary_is_clear(tmp_path: Path) -> None:
 
     assert result.ok is True
     assert result.summary == "Workspace is empty."
+
+
+def test_read_file_tool_missing_file_ignores_hidden_and_generated_dirs_in_suggestions(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    (workspace / "config.yaml").write_text("name: demo", encoding="utf-8")
+
+    git_dir = workspace / ".git"
+    git_dir.mkdir()
+    (git_dir / "config").write_text("git", encoding="utf-8")
+
+    venv_dir = workspace / ".venv"
+    venv_dir.mkdir()
+    (venv_dir / "configs.py").write_text("venv", encoding="utf-8")
+
+    request = ToolRequest(
+        tool_name="read_file",
+        arguments={
+            "path": "cnfig.yaml",
+            "workspace_root": str(workspace),
+        },
+        user_facing_label="reading cnfig.yaml",
+    )
+
+    result = read_file_tool(request)
+
+    assert result.ok is False
+    assert result.error_code == "file_not_found"
+    assert "config.yaml" in result.summary
+    assert ".git/config" not in result.summary
+    assert ".venv/" not in result.summary
+
+
+def test_read_file_tool_missing_file_ignores_session_dirs_in_suggestions(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    (workspace / "settings.toml").write_text("debug = true", encoding="utf-8")
+
+    sessions = workspace / ".assistant_sessions"
+    sessions.mkdir()
+    (sessions / "abc.json").write_text("{}", encoding="utf-8")
+
+    request = ToolRequest(
+        tool_name="read_file",
+        arguments={
+            "path": "setings.toml",
+            "workspace_root": str(workspace),
+        },
+        user_facing_label="reading setings.toml",
+    )
+
+    result = read_file_tool(request)
+
+    assert result.ok is False
+    assert result.error_code == "file_not_found"
+    assert "settings.toml" in result.summary
+    assert ".assistant_sessions/" not in result.summary

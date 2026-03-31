@@ -97,6 +97,18 @@ def _resolve_target_path(
         )
 
 
+def _should_ignore_suggestion_path(relative_path: str) -> bool:
+    parts = relative_path.split("/")
+    ignored_prefixes = {
+        ".git",
+        ".venv",
+        ".assistant_sessions",
+        ".assistant_sessions_demo",
+        "__pycache__",
+    }
+    return any(part in ignored_prefixes for part in parts)
+
+
 def _find_nearby_workspace_matches(workspace_root: Path, requested_path: Path) -> list[str]:
     requested_name = requested_path.name
     if not requested_name:
@@ -104,9 +116,13 @@ def _find_nearby_workspace_matches(workspace_root: Path, requested_path: Path) -
 
     try:
         candidates = sorted(
-            str(p.relative_to(workspace_root)).replace("\\", "/")
-            for p in workspace_root.rglob("*")
-            if p.is_file()
+            relative_path
+            for relative_path in (
+                str(p.relative_to(workspace_root)).replace("\\", "/")
+                for p in workspace_root.rglob("*")
+                if p.is_file()
+            )
+            if not _should_ignore_suggestion_path(relative_path)
         )
     except OSError:
         return []

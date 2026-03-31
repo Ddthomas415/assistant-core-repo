@@ -756,3 +756,29 @@ def test_cli_show_me_contents_routes_to_workspace_listing(tmp_path: Path) -> Non
 
     assert "workspace files" in result.stdout.lower()
     assert "a.txt" in result.stdout.lower()
+
+
+def test_cli_pasted_lines_are_processed_one_line_at_a_time(tmp_path: Path) -> None:
+    session_dir = tmp_path / "sessions"
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "assistant.cli",
+            "--session-dir",
+            str(session_dir),
+            "--workspace-root",
+            str(workspace_root),
+        ],
+        input="open readme\nread config\nquit\n",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    stdout = result.stdout.lower()
+    assert "check the path and try again." in stdout
+    assert "which config file do you want me to use?" in stdout

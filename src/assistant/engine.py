@@ -67,6 +67,33 @@ class Engine:
         notes: list[str] = []
         tool_result: ToolResult | None = None
 
+        if "\n" in cleaned_input:
+            route_decision = RouteDecision(
+                kind=RouteKind.ANSWER,
+                answer_text="Please send one command at a time. Multi-line pasted commands are not supported in this terminal UI.",
+            )
+            policy_outcome = PolicyOutcome(
+                kind=PolicyOutcomeKind.ALLOW,
+                reason="Multi-line pasted commands are rejected to avoid ambiguous routing.",
+            )
+            rendered_output = route_decision.answer_text
+            self._append_turn_messages(state, cleaned_input, rendered_output)
+            return EngineResult(
+                route_decision=route_decision,
+                policy_outcome=policy_outcome,
+                rendered_output=rendered_output,
+                tool_result=None,
+                trace=TurnTrace(
+                    route_kind=route_decision.kind,
+                    policy_outcome=policy_outcome.kind,
+                    tool_invoked=False,
+                    tool_execution_id=None,
+                    pending_transition=pending_transition,
+                    persistence_event="save_required",
+                    notes=notes,
+                ),
+            )
+
         # 1. Expire stale pending state first.
         if is_confirmation_expired(state, now):
             state.pending_confirmation = None
