@@ -445,11 +445,75 @@ class Engine:
                 ),
             )
 
-        if normalized in {"show files", "list files", "show files.", "list files."}:
+        if normalized in {"show files", "list files", "show files.", "list files.", "show me contents"}:
+            if self.workspace_root is None:
+                route_decision = RouteDecision(
+                    kind=RouteKind.ANSWER,
+                    answer_text=(
+                        "I can list files when a workspace root is set. Restart with --workspace-root to enable workspace listing."
+                    ),
+                )
+                policy_outcome = PolicyOutcome(
+                    kind=PolicyOutcomeKind.ALLOW,
+                    reason="Workspace listing requires a workspace root.",
+                )
+                rendered_output = route_decision.answer_text
+                self._append_turn_messages(state, cleaned_input, rendered_output)
+                return EngineResult(
+                    route_decision=route_decision,
+                    policy_outcome=policy_outcome,
+                    rendered_output=rendered_output,
+                    tool_result=None,
+                    trace=TurnTrace(
+                        route_kind=route_decision.kind,
+                        policy_outcome=policy_outcome.kind,
+                        tool_invoked=False,
+                        tool_execution_id=None,
+                        pending_transition=pending_transition,
+                        persistence_event="save_required",
+                        notes=notes,
+                    ),
+                )
+
             route_decision = RouteDecision(
-                kind=RouteKind.ANSWER,
-                answer_text=(
-                    "I do not support workspace listing yet. I can read a specific file if you give me a path."
+                kind=RouteKind.TOOL,
+                tool_request=ToolRequest(
+                    tool_name="list_workspace",
+                    arguments={"workspace_root": self.workspace_root},
+                    user_facing_label="listing workspace",
+                ),
+            )
+            policy_outcome = PolicyOutcome(
+                kind=PolicyOutcomeKind.ALLOW,
+                reason="Workspace listing is allowed within the configured workspace root.",
+            )
+            tool_result = self._execute_tool(route_decision.tool_request)
+            if tool_result is not None:
+                state.last_tool_execution = LastToolExecution(
+                    execution_id=tool_result.execution_id,
+                    tool_name=tool_result.tool_name,
+                    ok=tool_result.ok,
+                    summary=tool_result.summary,
+                    finished_at=tool_result.finished_at,
+                )
+                rendered_output = f"[{route_decision.tool_request.user_facing_label}...]\n{self._format_tool_summary(tool_result)}"
+            else:
+                rendered_output = "Workspace listing requested, but no list tool handler is configured."
+
+            self._append_turn_messages(state, cleaned_input, rendered_output)
+            return EngineResult(
+                route_decision=route_decision,
+                policy_outcome=policy_outcome,
+                rendered_output=rendered_output,
+                tool_result=tool_result,
+                trace=TurnTrace(
+                    route_kind=route_decision.kind,
+                    policy_outcome=policy_outcome.kind,
+                    tool_invoked=tool_result is not None,
+                    tool_execution_id=tool_result.execution_id if tool_result else None,
+                    pending_transition=pending_transition,
+                    persistence_event="save_required",
+                    notes=notes,
                 ),
             )
             policy_outcome = PolicyOutcome(
