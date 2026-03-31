@@ -791,3 +791,54 @@ def test_engine_answers_bare_write_file_prompt_with_write_guidance() -> None:
     text = result.rendered_output.lower()
     assert "write" in text or "confirmation" in text or "confirm" in text
     assert "outside my current scope" not in text
+
+
+def test_what_can_you_do_returns_capability_answer() -> None:
+    engine = Engine()
+    state = make_state()
+
+    result = engine.handle_turn(state, "What can you do?")
+
+    assert result.route_decision.kind == RouteKind.ANSWER
+    assert "answer direct questions" in result.rendered_output.lower()
+
+
+def test_show_files_returns_honest_direct_answer_until_list_tool_exists() -> None:
+    engine = Engine()
+    state = make_state()
+
+    result = engine.handle_turn(state, "show files")
+
+    assert result.route_decision.kind == RouteKind.ANSWER
+    assert "do not support workspace listing yet" in result.rendered_output.lower()
+
+
+def test_open_spec_maps_to_read_tool(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    docs = workspace / "docs"
+    docs.mkdir()
+    spec = docs / "spec-v1.md"
+    spec.write_text("contract text", encoding="utf-8")
+
+    engine = Engine(workspace_root=str(workspace))
+    state = make_state()
+
+    result = engine.handle_turn(state, "open spec")
+
+    assert result.route_decision.kind == RouteKind.TOOL
+    assert result.tool_result is not None
+    assert result.tool_result.ok is True
+    assert result.tool_result.tool_name == "read_file"
+    assert "contract text" in result.rendered_output.lower()
+
+
+def test_read_config_requires_clarification() -> None:
+    engine = Engine()
+    state = make_state()
+
+    result = engine.handle_turn(state, "read config")
+
+    assert result.route_decision.kind == RouteKind.CLARIFY
+    assert result.policy_outcome.kind.value == "require_clarification"
+    assert state.pending_clarification is not None
