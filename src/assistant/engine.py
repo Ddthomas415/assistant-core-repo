@@ -70,7 +70,7 @@ class Engine:
         if "\n" in cleaned_input:
             route_decision = RouteDecision(
                 kind=RouteKind.ANSWER,
-                answer_text="Please send one command at a time. Multi-line pasted commands are not supported in this terminal UI.",
+                answer_text="Please send one command at a time. Multi-line pasted commands are not supported in this terminal UI. Try a single command like 'show files' or 'read README.md'.",
             )
             policy_outcome = PolicyOutcome(
                 kind=PolicyOutcomeKind.ALLOW,
@@ -1374,7 +1374,8 @@ class Engine:
         return (
             "That request is outside my current scope. I can help with local file and workspace "
             "tasks, including reading files, writing with confirmation, listing workspace files, "
-            "and clarifying ambiguous requests."
+            "and clarifying ambiguous requests. Try commands like 'show files', 'read README.md', "
+            "or 'open settings'."
         )
 
     def _tool_label(self, tool_name: str, arguments: dict[str, str]) -> str:
