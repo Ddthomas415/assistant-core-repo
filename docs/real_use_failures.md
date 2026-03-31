@@ -111,3 +111,26 @@ Pattern:
 Decision:
 - next slice should improve capability/help/listing phrasing and ambiguous bare command prompts
 - do not broaden architecture or routing beyond this UX cluster
+
+## Session 8 — workspace listing phrasing validation
+
+Tasks intended: probe natural-language variants for workspace listing and task discovery
+
+| # | input (exact) | actual output (brief) | expected | category | impact |
+|---|---|---|---|---|---|
+| 1 | "list capable workspace tasks" | "That request is outside my current scope..." | capability/help summary or workspace-task guidance | output-confusing | low |
+| 2 | "what files are in my workspace?" | "That request is outside my current scope..." | actual workspace listing | routing-miss | high |
+| 3 | "'can you list everything in the workspace folder?" | "That request is outside my current scope..." | actual workspace listing | routing-miss | high |
+| 4 | "list folders?" | "That request is outside my current scope..." | workspace listing or folder guidance | routing-miss | medium |
+| 5 | "task list?" | "That request is outside my current scope..." | clear out-of-scope answer | output-confusing | low |
+| 6 | "list all tasks" | "That request is outside my current scope..." | clear out-of-scope answer | output-confusing | low |
+| 7 | "directory" | "That request is outside my current scope..." | workspace listing guidance | output-confusing | medium |
+| 8 | "folders" | "That request is outside my current scope..." | workspace listing guidance | output-confusing | medium |
+| 9 | "list workspace files" | "That request is outside my current scope..." | actual workspace listing | routing-miss | high |
+
+## Session 8 Conclusion
+
+Pattern:
+- workspace-listing behavior is still too phrase-sensitive
+- exact help/capability prompts work
+- next coding slice should improve real workspace-listing variants only
