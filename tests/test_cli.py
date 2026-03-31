@@ -428,3 +428,53 @@ def test_cli_workspace_listing_phrase_succeeds(tmp_path: Path) -> None:
     assert "[listing workspace...]" in stdout
     assert "a.txt" in stdout
     assert "sub/b.txt" in stdout
+
+def test_cli_resume_preserves_pending_clarification(tmp_path: Path) -> None:
+    session_dir = tmp_path / "sessions"
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    target = workspace_root / "config.yaml"
+    target.write_text("name: demo\n", encoding="utf-8")
+
+    first = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "assistant.cli",
+            "--session-dir",
+            str(session_dir),
+            "--workspace-root",
+            str(workspace_root),
+        ],
+        input="open the config file\nexit\n",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    lines = [line.strip() for line in first.stdout.splitlines() if line.strip()]
+    session_line = next(line for line in lines if line.startswith("Session: "))
+    session_id = session_line.split("Session: ", 1)[1]
+
+    resumed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "assistant.cli",
+            "--session-dir",
+            str(session_dir),
+            "--workspace-root",
+            str(workspace_root),
+            "--resume",
+            session_id,
+        ],
+        input="config.yaml\nexit\n",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    stdout = resumed.stdout.lower()
+    assert "[reading]" in stdout or "[reading " in stdout
+    assert "config.yaml" in stdout
+    assert "name: demo" in stdout
