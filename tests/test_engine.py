@@ -1069,3 +1069,29 @@ def test_list_files_with_workspace_root_routes_to_listing_tool(tmp_path) -> None
     assert "a.txt" in result.rendered_output
 
 
+
+
+def test_show_me_contents_with_workspace_root_routes_to_listing_tool(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "a.txt").write_text("a", encoding="utf-8")
+
+    engine = Engine(workspace_root=str(workspace))
+    state = make_state()
+
+    result = engine.handle_turn(state, "show me contents")
+
+    assert result.route_decision.kind == RouteKind.TOOL
+    assert result.tool_result is not None
+    assert result.tool_result.ok is True
+    assert "a.txt" in result.rendered_output
+
+
+def test_show_me_contents_without_workspace_root_returns_guidance() -> None:
+    engine = Engine()
+    state = make_state()
+
+    result = engine.handle_turn(state, "show me contents")
+
+    assert result.route_decision.kind == RouteKind.ANSWER
+    assert "workspace root" in result.rendered_output.lower()
