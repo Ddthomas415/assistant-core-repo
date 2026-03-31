@@ -651,3 +651,29 @@ def test_cli_read_config_with_multiple_candidates_shows_choices(tmp_path: Path) 
 
     assert "config.yaml" in result.stdout
     assert "settings.toml" in result.stdout
+
+
+def test_cli_read_config_followup_accepts_extension_reply(tmp_path: Path) -> None:
+    session_dir = tmp_path / "sessions"
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    (workspace_root / "config.yaml").write_text("yaml: true", encoding="utf-8")
+    (workspace_root / "settings.toml").write_text("toml = true", encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "assistant.cli",
+            "--session-dir",
+            str(session_dir),
+            "--workspace-root",
+            str(workspace_root),
+        ],
+        input="read config\nyaml\nexit\n",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert "yaml: true" in result.stdout.lower()
