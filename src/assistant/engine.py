@@ -288,6 +288,28 @@ class Engine:
 
 
 
+
+    def _find_settings_candidates(self) -> list[str]:
+        if self.workspace_root is None:
+            return []
+
+        workspace = Path(self.workspace_root).expanduser().resolve(strict=False)
+        candidate_names = [
+            "settings.toml",
+            "settings.yaml",
+            "settings.yml",
+            "settings.json",
+        ]
+
+        found: list[str] = []
+        for name in candidate_names:
+            candidate = workspace / name
+            if candidate.is_file():
+                found.append(name)
+
+        return found
+
+
     def _find_config_candidates(self) -> list[str]:
         if self.workspace_root is None:
             return []
@@ -543,6 +565,70 @@ class Engine:
                 rendered_output = f"[{route_decision.tool_request.user_facing_label}...]\n{self._format_tool_summary(tool_result)}"
             else:
                 rendered_output = "README read requested, but no read tool handler is configured."
+
+            self._append_turn_messages(state, cleaned_input, rendered_output)
+            return EngineResult(
+                route_decision=route_decision,
+                policy_outcome=policy_outcome,
+                rendered_output=rendered_output,
+                tool_result=tool_result,
+                trace=TurnTrace(
+                    route_kind=route_decision.kind,
+                    policy_outcome=policy_outcome.kind,
+                    tool_invoked=tool_result is not None,
+                    tool_execution_id=tool_result.execution_id if tool_result else None,
+                    pending_transition=pending_transition,
+                    persistence_event="save_required",
+                    notes=notes,
+                ),
+            )
+
+
+        if normalized in {
+            "open settings",
+            "open settings.",
+            "read settings",
+            "read settings.",
+            "open settings.toml",
+            "open settings.toml.",
+            "open settings.yaml",
+            "open settings.yaml.",
+            "open settings.yml",
+            "open settings.yml.",
+            "open settings.json",
+            "open settings.json.",
+        }:
+            settings_candidates = self._find_settings_candidates()
+            file_path = settings_candidates[0] if settings_candidates else "settings.toml"
+
+            arguments = {"path": file_path}
+            if self.workspace_root is not None:
+                arguments["workspace_root"] = self.workspace_root
+
+            route_decision = RouteDecision(
+                kind=RouteKind.TOOL,
+                tool_request=ToolRequest(
+                    tool_name="read_file",
+                    arguments=arguments,
+                    user_facing_label=f"reading {file_path}",
+                ),
+            )
+            policy_outcome = PolicyOutcome(
+                kind=PolicyOutcomeKind.ALLOW,
+                reason="Settings alias maps to a read-only tool request.",
+            )
+            tool_result = self._execute_tool(route_decision.tool_request)
+            if tool_result is not None:
+                state.last_tool_execution = LastToolExecution(
+                    execution_id=tool_result.execution_id,
+                    tool_name=tool_result.tool_name,
+                    ok=tool_result.ok,
+                    summary=tool_result.summary,
+                    finished_at=tool_result.finished_at,
+                )
+                rendered_output = f"[{route_decision.tool_request.user_facing_label}...]\n{self._format_tool_summary(tool_result)}"
+            else:
+                rendered_output = "Settings read requested, but no read tool handler is configured."
 
             self._append_turn_messages(state, cleaned_input, rendered_output)
             return EngineResult(

@@ -677,3 +677,28 @@ def test_cli_read_config_followup_accepts_extension_reply(tmp_path: Path) -> Non
     )
 
     assert "yaml: true" in result.stdout.lower()
+
+
+def test_cli_open_settings_reads_workspace_settings(tmp_path: Path) -> None:
+    session_dir = tmp_path / "sessions"
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    (workspace_root / "settings.toml").write_text("debug = true", encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "assistant.cli",
+            "--session-dir",
+            str(session_dir),
+            "--workspace-root",
+            str(workspace_root),
+        ],
+        input="open settings\nexit\n",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert "debug = true" in result.stdout.lower()
