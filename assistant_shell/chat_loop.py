@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from core.router import route_user_message
+from core.tool_registry import execute_tool_request
 from core.types import PendingClarification, PendingConfirmation
 
 
@@ -75,12 +76,24 @@ def run_chat_loop() -> None:
 
         elif route.kind == "tool":
             if route.tool_request is not None:
-                message = (
-                    f"[{route.tool_request.user_facing_label}...]\n"
-                    "Tool execution not wired yet in this first shell slice."
-                )
+                tool_result = execute_tool_request(route.tool_request)
+                header = f"[{route.tool_request.user_facing_label}...]"
+
+                if tool_result.ok:
+                    if tool_result.tool_name == "read_file":
+                        filename = tool_result.data.get("filename", "<unknown>")
+                        message = f"{header}\nRead request completed for {filename}."
+                    elif tool_result.tool_name == "list_workspace":
+                        message = f"{header}\nWorkspace listing request completed."
+                    else:
+                        message = f"{header}\n{tool_result.summary}"
+                else:
+                    message = (
+                        f"{header}\n"
+                        f"Tool failed: {tool_result.error_message or tool_result.summary}"
+                    )
             else:
-                message = "[tool...]\nTool execution not wired yet."
+                message = "[tool...]\nNo tool request was provided."
 
         else:
             message = "Unknown route."
