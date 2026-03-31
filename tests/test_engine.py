@@ -842,3 +842,20 @@ def test_read_config_requires_clarification() -> None:
     assert result.route_decision.kind == RouteKind.CLARIFY
     assert result.policy_outcome.kind.value == "require_clarification"
     assert state.pending_clarification is not None
+
+
+def test_engine_read_missing_file_inside_workspace_suggests_nearby_match(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "config.yaml").write_text("name: demo", encoding="utf-8")
+
+    engine = Engine(workspace_root=str(workspace))
+    state = make_state()
+
+    result = engine.handle_turn(state, "Read confi.yaml")
+
+    assert result.route_decision.kind == RouteKind.TOOL
+    assert result.tool_result is not None
+    assert result.tool_result.ok is False
+    assert result.tool_result.error_code == "file_not_found"
+    assert "config.yaml" in result.rendered_output

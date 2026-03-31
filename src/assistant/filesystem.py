@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import difflib
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -96,6 +97,36 @@ def _resolve_target_path(
         )
 
 
+
+def _find_nearby_workspace_matches(workspace_root: Path, requested_path: Path) -> list[str]:
+    requested_name = requested_path.name
+    if not requested_name:
+        return []
+
+    try:
+        candidates = sorted(
+            str(p.relative_to(workspace_root)).replace("\\", "/")
+            for p in workspace_root.rglob("*")
+            if p.is_file()
+        )
+    except OSError:
+        return []
+
+    if not candidates:
+        return []
+
+    name_map = {candidate.split("/")[-1]: candidate for candidate in candidates}
+    close_names = difflib.get_close_matches(requested_name, list(name_map.keys()), n=3, cutoff=0.5)
+
+    ordered: list[str] = []
+    for name in close_names:
+        candidate = name_map[name]
+        if candidate not in ordered:
+            ordered.append(candidate)
+
+    return ordered
+
+
 def read_file_tool(request: ToolRequest) -> ToolResult:
     started_at = utc_now_iso()
     path, workspace_root, error = _resolve_target_path(request.tool_name, request, started_at)
@@ -104,15 +135,24 @@ def read_file_tool(request: ToolRequest) -> ToolResult:
     assert path is not None
 
     if not path.exists():
+        suggestions: list[str] = []
+        if workspace_root is not None:
+            suggestions = _find_nearby_workspace_matches(workspace_root, path)
+
+        summary = f"Read failed: file not found: {path}"
+        if suggestions:
+            summary += "\nDid you mean:\n" + "\n".join(suggestions)
+
         return _result(
             ok=False,
             tool_name=request.tool_name,
-            summary=f"Read failed: file not found: {path}",
+            summary=summary,
             error_code="file_not_found",
             error_message=f"File does not exist: {path}",
             data={
                 "path": str(path),
                 "workspace_root": str(workspace_root) if workspace_root else None,
+                "suggestions": suggestions,
             },
             started_at=started_at,
         )

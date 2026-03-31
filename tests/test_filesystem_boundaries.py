@@ -96,3 +96,45 @@ def test_write_file_tool_allows_path_inside_workspace(tmp_path: Path) -> None:
 
     assert result.ok is True
     assert inside.read_text(encoding="utf-8") == "hello"
+
+
+def test_read_file_tool_missing_file_suggests_nearby_match(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "config.yaml").write_text("name: demo", encoding="utf-8")
+
+    request = ToolRequest(
+        tool_name="read_file",
+        arguments={
+            "path": "confi.yaml",
+            "workspace_root": str(workspace),
+        },
+        user_facing_label="reading confi.yaml",
+    )
+
+    result = read_file_tool(request)
+
+    assert result.ok is False
+    assert result.error_code == "file_not_found"
+    assert "did you mean" in result.summary.lower()
+    assert "config.yaml" in result.summary
+    assert result.data["suggestions"] == ["config.yaml"]
+
+
+def test_read_file_tool_missing_file_without_workspace_has_no_suggestions(tmp_path: Path) -> None:
+    missing = tmp_path / "confi.yaml"
+
+    request = ToolRequest(
+        tool_name="read_file",
+        arguments={
+            "path": str(missing),
+        },
+        user_facing_label="reading missing file",
+    )
+
+    result = read_file_tool(request)
+
+    assert result.ok is False
+    assert result.error_code == "file_not_found"
+    assert "did you mean" not in result.summary.lower()
+    assert result.data["suggestions"] == []
