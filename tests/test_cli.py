@@ -702,3 +702,31 @@ def test_cli_open_settings_reads_workspace_settings(tmp_path: Path) -> None:
     )
 
     assert "debug = true" in result.stdout.lower()
+
+
+def test_cli_show_files_routes_to_workspace_listing(tmp_path: Path) -> None:
+    session_dir = tmp_path / "sessions"
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    (workspace_root / "a.txt").write_text("a", encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "assistant.cli",
+            "--session-dir",
+            str(session_dir),
+            "--workspace-root",
+            str(workspace_root),
+        ],
+        input="show files\nexit\n",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert "workspace files" in result.stdout.lower()
+    assert "a.txt" in result.stdout.lower()
+
+

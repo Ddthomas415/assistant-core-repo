@@ -810,7 +810,7 @@ def test_show_files_returns_honest_direct_answer_until_list_tool_exists() -> Non
     result = engine.handle_turn(state, "show files")
 
     assert result.route_decision.kind == RouteKind.ANSWER
-    assert "do not support workspace listing yet" in result.rendered_output.lower()
+    assert "workspace root is set" in result.rendered_output.lower()
 
 
 def test_open_spec_maps_to_read_tool(tmp_path) -> None:
@@ -1035,3 +1035,37 @@ def test_read_settings_missing_returns_structured_failure(tmp_path) -> None:
     assert result.tool_result.ok is False
     assert result.tool_result.error_code == "file_not_found"
     assert "settings" in result.rendered_output.lower()
+
+
+def test_show_files_with_workspace_root_routes_to_listing_tool(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "a.txt").write_text("a", encoding="utf-8")
+
+    engine = Engine(workspace_root=str(workspace))
+    state = make_state()
+
+    result = engine.handle_turn(state, "show files")
+
+    assert result.route_decision.kind == RouteKind.TOOL
+    assert result.tool_result is not None
+    assert result.tool_result.ok is True
+    assert "a.txt" in result.rendered_output
+
+
+def test_list_files_with_workspace_root_routes_to_listing_tool(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "a.txt").write_text("a", encoding="utf-8")
+
+    engine = Engine(workspace_root=str(workspace))
+    state = make_state()
+
+    result = engine.handle_turn(state, "list files")
+
+    assert result.route_decision.kind == RouteKind.TOOL
+    assert result.tool_result is not None
+    assert result.tool_result.ok is True
+    assert "a.txt" in result.rendered_output
+
+
