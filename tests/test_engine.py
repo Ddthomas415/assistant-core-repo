@@ -1003,3 +1003,35 @@ def test_read_config_followup_keeps_clarifying_on_invalid_short_reply(tmp_path) 
     assert state.pending_clarification is not None
     assert "config.yaml" in second.rendered_output
     assert "settings.toml" in second.rendered_output
+
+
+def test_open_settings_reads_single_settings_file(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "settings.toml").write_text("debug = true", encoding="utf-8")
+
+    engine = Engine(workspace_root=str(workspace))
+    state = make_state()
+
+    result = engine.handle_turn(state, "open settings")
+
+    assert result.route_decision.kind == RouteKind.TOOL
+    assert result.tool_result is not None
+    assert result.tool_result.ok is True
+    assert "debug = true" in result.rendered_output.lower()
+
+
+def test_read_settings_missing_returns_structured_failure(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    engine = Engine(workspace_root=str(workspace))
+    state = make_state()
+
+    result = engine.handle_turn(state, "read settings")
+
+    assert result.route_decision.kind == RouteKind.TOOL
+    assert result.tool_result is not None
+    assert result.tool_result.ok is False
+    assert result.tool_result.error_code == "file_not_found"
+    assert "settings" in result.rendered_output.lower()
