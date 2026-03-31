@@ -80,6 +80,56 @@ class Engine:
 
         # 2. Resolve valid pending clarification if the user reply satisfies it.
         if state.pending_clarification is not None:
+            resolved = state.pending_clarification
+            bound_request = resolved.bound_user_request.strip().lower()
+            config_followup_requests = {"read config", "read config.", "open config", "open config."}
+
+            if bound_request in config_followup_requests:
+                continued_input = self._reconstruct_clarified_request(resolved, cleaned_input)
+                if continued_input is not None:
+                    state.pending_clarification = None
+                    pending_transition = PendingTransitionKind.RESOLVED
+                    notes.append("pending_clarification_resolved")
+                    return self._handle_routed_input(
+                        state=state,
+                        route_input=continued_input,
+                        now=now,
+                        pending_transition=pending_transition,
+                        notes=notes,
+                        message_input=cleaned_input,
+                    )
+
+                config_candidates = self._find_config_candidates()
+                if config_candidates and cleaned_input:
+                    prompt = self._config_candidates_prompt(config_candidates)
+                    state.pending_clarification.prompt = prompt
+                    route_decision = RouteDecision(
+                        kind=RouteKind.CLARIFY,
+                        clarification_prompt=prompt,
+                        clarification_target=resolved.target,
+                    )
+                    policy_outcome = PolicyOutcome(
+                        kind=PolicyOutcomeKind.REQUIRE_CLARIFICATION,
+                        reason="Clarification reply did not match any config candidate.",
+                    )
+                    rendered_output = prompt
+                    self._append_turn_messages(state, cleaned_input, rendered_output)
+                    return EngineResult(
+                        route_decision=route_decision,
+                        policy_outcome=policy_outcome,
+                        rendered_output=rendered_output,
+                        tool_result=None,
+                        trace=TurnTrace(
+                            route_kind=route_decision.kind,
+                            policy_outcome=policy_outcome.kind,
+                            tool_invoked=False,
+                            tool_execution_id=None,
+                            pending_transition=pending_transition,
+                            persistence_event="save_required",
+                            notes=notes,
+                        ),
+                    )
+
             if satisfies_clarification(state.pending_clarification, cleaned_input):
                 resolved = state.pending_clarification
                 state.pending_clarification = None
@@ -262,6 +312,45 @@ class Engine:
 
         return found
 
+
+
+    def _resolve_config_followup_choice(self, user_input: str, candidates: list[str]) -> str | None:
+        cleaned = user_input.strip().lower()
+        if not cleaned or not candidates:
+            return None
+
+        if cleaned.isdigit():
+            index = int(cleaned) - 1
+            if 0 <= index < len(candidates):
+                return candidates[index]
+            return None
+
+        extension_map: dict[str, list[str]] = {}
+        for candidate in candidates:
+            suffix = Path(candidate).suffix.lower().lstrip(".")
+            if suffix:
+                extension_map.setdefault(suffix, []).append(candidate)
+
+        if cleaned in extension_map and len(extension_map[cleaned]) == 1:
+            return extension_map[cleaned][0]
+
+        exact = [candidate for candidate in candidates if candidate.lower() == cleaned]
+        if len(exact) == 1:
+            return exact[0]
+
+        basename = [candidate for candidate in candidates if Path(candidate).stem.lower() == cleaned]
+        if len(basename) == 1:
+            return basename[0]
+
+        return None
+
+    def _config_candidates_prompt(self, candidates: list[str]) -> str:
+        numbered = "\n".join(f"{idx + 1}. {candidate}" for idx, candidate in enumerate(candidates))
+        return (
+            "I found multiple config files. Which one do you want me to use?\n"
+            f"{numbered}\n"
+            "Reply with a number, full filename, or file type like yaml or toml."
+        )
 
     def _format_tool_summary(self, tool_result: ToolResult) -> str:
         if tool_result.ok:
@@ -524,11 +613,7 @@ class Engine:
                 )
 
             if len(config_candidates) > 1:
-                choices = ", ".join(config_candidates)
-                prompt = (
-                    "I found multiple config files. Which one do you want me to use? "
-                    f"Choices: {choices}"
-                )
+                prompt = self._config_candidates_prompt(config_candidates)
             else:
                 prompt = "Which config file do you want me to use? Please provide the file path or filename."
 
@@ -972,6 +1057,18 @@ class Engine:
     ) -> str | None:
         original = resolved.bound_user_request.strip().lower()
         clarified_path = cleaned_input.strip()
+
+        if original in {"read config", "read config.", "open config", "open config."}:
+            candidates = self._find_config_candidates()
+
+            if len(candidates) == 1:
+                return f"read {candidates[0]}"
+
+            selected = self._resolve_config_followup_choice(cleaned_input, candidates)
+            if selected is not None:
+                return f"read {selected}"
+
+            return None
 
         if original.rstrip(".?!") == "open the config file":
             return f"read {clarified_path}"
