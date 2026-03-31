@@ -103,6 +103,12 @@ Examples of useful categories:
 - repeated failures are grouped
 - next work can be chosen from evidence instead of guesswork
 
+### Stop condition
+
+- if a fresh real-use session does not reveal a repeated meaningful failure cluster, stop
+- do not keep probing just because Priority 2 exists
+- only resume evidence collection when a new real workflow or new regression appears
+
 ## Priority 3: Routing Expansion Only If Evidence Demands It
 
 ### Objective
