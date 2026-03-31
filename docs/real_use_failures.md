@@ -84,3 +84,30 @@ Pattern:
 Decision:
 - next slice should improve small help/capability/listing phrasing variants only
 - do not broaden architecture or routing beyond this UX cluster
+
+## Session 7 — capability and command-phrase validation
+
+Tasks intended: probe nearby natural-language variants around capability, help, and basic file commands
+
+| # | input (exact) | actual output (brief) | expected | category | impact |
+|---|---|---|---|---|---|
+| 1 | "can you code?" | "That request is outside my current scope..." | clear scope/capability answer | output-confusing | low |
+| 2 | "what is with in your current scope?" | "That request is outside my current scope..." | capability summary | output-confusing | medium |
+| 3 | "help me with local files" | "That request is outside my current scope..." | local file help guidance | output-confusing | medium |
+| 4 | "what workspace tasks can you perform?" | "That request is outside my current scope..." | workspace capability summary | output-confusing | medium |
+| 5 | "read file" | "Read failed: file not found: .../workspace/file" | ask which file or give read guidance | unclear-clarification | medium |
+| 6 | "write file" | "That request is outside my current scope..." | ask what filename/content or give write guidance | output-confusing | medium |
+| 7 | "list files" | "That request is outside my current scope..." | workspace-list guidance | output-confusing | medium |
+| 8 | "list all workspace file" | "That request is outside my current scope..." | workspace-list guidance | output-confusing | medium |
+| 9 | "clarify your functions?" | "That request is outside my current scope..." | capability/help summary | output-confusing | low |
+
+## Session 7 Conclusion
+
+Pattern:
+- exact supported prompts work
+- nearby natural-language variants still fall back too often
+- "read file" should likely clarify instead of treating "file" as a literal path
+
+Decision:
+- next slice should improve capability/help/listing phrasing and ambiguous bare command prompts
+- do not broaden architecture or routing beyond this UX cluster
