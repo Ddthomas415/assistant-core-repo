@@ -1140,3 +1140,28 @@ def test_multiline_input_returns_clear_single_command_message(tmp_path) -> None:
 
     assert result.route_decision.kind == RouteKind.ANSWER
     assert "one command at a time" in result.rendered_output.lower()
+
+
+def test_out_of_scope_answer_includes_concrete_examples() -> None:
+    engine = Engine()
+    state = make_state()
+
+    result = engine.handle_turn(state, "plan my vacation")
+
+    assert result.route_decision.kind == RouteKind.ANSWER
+    text = result.rendered_output.lower()
+    assert "read readme.md" in text
+    assert "show files" in text
+    assert "open settings" in text
+
+
+def test_multiline_guard_still_has_actionable_example() -> None:
+    engine = Engine()
+    state = make_state()
+
+    result = engine.handle_turn(state, "open readme\nread config")
+
+    assert result.route_decision.kind == RouteKind.ANSWER
+    text = result.rendered_output.lower()
+    assert "one command at a time" in text
+    assert "show files" in text
