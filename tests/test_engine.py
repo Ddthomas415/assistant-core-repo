@@ -1165,3 +1165,21 @@ def test_multiline_guard_still_has_actionable_example() -> None:
     text = result.rendered_output.lower()
     assert "one command at a time" in text
     assert "show files" in text
+
+
+def test_open_settings_without_settings_files_fails_cleanly(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "pyproject.toml").write_text("[tool.demo]\n", encoding="utf-8")
+
+    engine = Engine(workspace_root=str(workspace))
+    state = make_state()
+
+    result = engine.handle_turn(state, "open settings")
+
+    assert result.route_decision.kind == RouteKind.TOOL
+    assert result.tool_result is not None
+    assert result.tool_result.ok is False
+    assert result.tool_result.error_code == "file_not_found"
+    assert "settings.toml" in result.rendered_output.lower()
+    assert "pyproject.toml" not in result.rendered_output.lower()

@@ -106,10 +106,17 @@ def _should_ignore_suggestion_path(relative_path: str) -> bool:
         ".assistant_sessions_demo",
         "__pycache__",
     }
-    return any(part in ignored_prefixes for part in parts)
+    ignored_filenames = {
+        ".DS_Store",
+    }
+    return any(part in ignored_prefixes for part in parts) or parts[-1] in ignored_filenames
 
 
-def _find_nearby_workspace_matches(workspace_root: Path, requested_path: Path) -> list[str]:
+def _find_nearby_workspace_matches(
+    workspace_root: Path,
+    requested_path: Path,
+    allowed_names: list[str] | None = None,
+) -> list[str]:
     requested_name = requested_path.name
     if not requested_name:
         return []
@@ -126,6 +133,10 @@ def _find_nearby_workspace_matches(workspace_root: Path, requested_path: Path) -
         )
     except OSError:
         return []
+
+    if allowed_names is not None:
+        allowed = {name.lower() for name in allowed_names}
+        candidates = [candidate for candidate in candidates if candidate.lower() in allowed]
 
     if not candidates:
         return []
@@ -152,7 +163,9 @@ def read_file_tool(request: ToolRequest) -> ToolResult:
     if not path.exists():
         suggestions: list[str] = []
         if workspace_root is not None:
-            suggestions = _find_nearby_workspace_matches(workspace_root, path)
+            suggestion_names = request.arguments.get("suggestion_names")
+            allowed_names = suggestion_names if isinstance(suggestion_names, list) else None
+            suggestions = _find_nearby_workspace_matches(workspace_root, path, allowed_names=allowed_names)
 
         summary = f"Read failed: file not found: {path}"
         if suggestions:
@@ -338,9 +351,13 @@ def list_workspace_tool(request: ToolRequest) -> ToolResult:
 
     try:
         files = sorted(
-            str(p.relative_to(root)).replace("\\", "/")
-            for p in root.rglob("*")
-            if p.is_file()
+            relative_path
+            for relative_path in (
+                str(p.relative_to(root)).replace("\\", "/")
+                for p in root.rglob("*")
+                if p.is_file()
+            )
+            if not _should_ignore_suggestion_path(relative_path)
         )
     except OSError as exc:
         return _result(
