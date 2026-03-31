@@ -12,3 +12,8 @@ logs/
 .assistant_sessions/
 
 workspace/
+
+# local scratch files
+config.yaml
+spec.md
+test.py
