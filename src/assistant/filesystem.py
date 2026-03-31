@@ -6,35 +6,32 @@ from uuid import uuid4
 
 from assistant.models import ToolRequest, ToolResult
 
-MAX_READ_BYTES = 1024 * 1024
-MAX_WORKSPACE_FILES = 200
+MAX_READ_BYTES = 64 * 1024
+MAX_WORKSPACE_FILES = 50
 
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _invalid_path_result(tool_name: str, started_at: str) -> ToolResult:
+def _result(
+    *,
+    ok: bool,
+    tool_name: str,
+    summary: str,
+    data: dict | None = None,
+    error_code: str | None = None,
+    error_message: str | None = None,
+    started_at: str,
+) -> ToolResult:
     return ToolResult(
-        ok=False,
+        ok=ok,
         tool_name=tool_name,
         execution_id=str(uuid4()),
-        summary="Operation failed: invalid path.",
-        error_code="invalid_path",
-        error_message="Tool argument 'path' must be a non-empty string.",
-        started_at=started_at,
-        finished_at=utc_now_iso(),
-    )
-
-
-def _outside_workspace_result(tool_name: str, path: Path, workspace_root: Path, started_at: str) -> ToolResult:
-    return ToolResult(
-        ok=False,
-        tool_name=tool_name,
-        execution_id=str(uuid4()),
-        summary=f"Operation failed: path is outside workspace: {path}",
-        error_code="path_outside_workspace",
-        error_message=f"Resolved path '{path}' is outside workspace root '{workspace_root}'.",
+        summary=summary,
+        data=data or {},
+        error_code=error_code,
+        error_message=error_message,
         started_at=started_at,
         finished_at=utc_now_iso(),
     )
@@ -45,249 +42,277 @@ def _resolve_workspace_root(value: object) -> Path | None:
         return None
     if not isinstance(value, str) or not value.strip():
         return None
-    return Path(value).expanduser().resolve()
+    return Path(value).expanduser().resolve(strict=False)
 
 
-def _resolve_target_path(tool_name: str, request: ToolRequest, started_at: str) -> tuple[Path | None, ToolResult | None]:
+def _resolve_target_path(
+    tool_name: str,
+    request: ToolRequest,
+    started_at: str,
+) -> tuple[Path | None, Path | None, ToolResult | None]:
     path_value = request.arguments.get("path")
-
     if not isinstance(path_value, str) or not path_value.strip():
-        return None, _invalid_path_result(tool_name, started_at)
-
-    try:
-        raw_path = Path(path_value).expanduser()
-        workspace_root = _resolve_workspace_root(request.arguments.get("workspace_root"))
-        if workspace_root is not None and not raw_path.is_absolute():
-            path = (workspace_root / raw_path).resolve(strict=False)
-        else:
-            path = raw_path.resolve(strict=False)
-    except OSError as exc:
-        return None, ToolResult(
+        return None, None, _result(
             ok=False,
             tool_name=tool_name,
-            execution_id=str(uuid4()),
+            summary="Operation failed: invalid path.",
+            error_code="invalid_path",
+            error_message="Tool argument 'path' must be a non-empty string.",
+            started_at=started_at,
+        )
+
+    workspace_root = _resolve_workspace_root(request.arguments.get("workspace_root"))
+    raw_path = Path(path_value).expanduser()
+
+    try:
+        if workspace_root is not None:
+            candidate = raw_path if raw_path.is_absolute() else workspace_root / raw_path
+            resolved = candidate.resolve(strict=False)
+            try:
+                resolved.relative_to(workspace_root)
+            except ValueError:
+                return None, workspace_root, _result(
+                    ok=False,
+                    tool_name=tool_name,
+                    summary=f"Operation failed: path is outside workspace: {resolved}",
+                    error_code="path_outside_workspace",
+                    error_message=f"Resolved path '{resolved}' is outside workspace root '{workspace_root}'.",
+                    data={"path": str(resolved), "workspace_root": str(workspace_root)},
+                    started_at=started_at,
+                )
+            return resolved, workspace_root, None
+
+        resolved = raw_path.resolve(strict=False)
+        return resolved, None, None
+
+    except OSError as exc:
+        return None, workspace_root, _result(
+            ok=False,
+            tool_name=tool_name,
             summary=f"Operation failed: {exc}",
             error_code="os_error",
             error_message=str(exc),
             started_at=started_at,
-            finished_at=utc_now_iso(),
         )
-
-    if workspace_root is not None:
-        try:
-            path.relative_to(workspace_root)
-        except ValueError:
-            return None, _outside_workspace_result(tool_name, path, workspace_root, started_at)
-
-    return path, None
 
 
 def read_file_tool(request: ToolRequest) -> ToolResult:
     started_at = utc_now_iso()
-    path, error = _resolve_target_path(request.tool_name, request, started_at)
+    path, workspace_root, error = _resolve_target_path(request.tool_name, request, started_at)
     if error is not None:
         return error
     assert path is not None
 
     if not path.exists():
-        return ToolResult(
+        return _result(
             ok=False,
             tool_name=request.tool_name,
-            execution_id=str(uuid4()),
             summary=f"Read failed: file not found: {path}",
             error_code="file_not_found",
             error_message=f"File does not exist: {path}",
+            data={
+                "path": str(path),
+                "workspace_root": str(workspace_root) if workspace_root else None,
+            },
             started_at=started_at,
-            finished_at=utc_now_iso(),
         )
 
     if not path.is_file():
-        return ToolResult(
+        return _result(
             ok=False,
             tool_name=request.tool_name,
-            execution_id=str(uuid4()),
             summary=f"Read failed: not a file: {path}",
             error_code="not_a_file",
             error_message=f"Path is not a regular file: {path}",
+            data={
+                "path": str(path),
+                "workspace_root": str(workspace_root) if workspace_root else None,
+            },
             started_at=started_at,
-            finished_at=utc_now_iso(),
         )
 
     try:
-        size_bytes = path.stat().st_size
-        if size_bytes > MAX_READ_BYTES:
-            return ToolResult(
-                ok=False,
-                tool_name=request.tool_name,
-                execution_id=str(uuid4()),
-                summary=f"Read failed: file too large: {path}",
-                error_code="file_too_large",
-                error_message=f"File exceeds max read size of {MAX_READ_BYTES} bytes: {path}",
-                started_at=started_at,
-                finished_at=utc_now_iso(),
-            )
-
-        content = path.read_text(encoding="utf-8")
-    except UnicodeDecodeError:
-        return ToolResult(
-            ok=False,
-            tool_name=request.tool_name,
-            execution_id=str(uuid4()),
-            summary=f"Read failed: file is not valid UTF-8 text: {path}",
-            error_code="decode_error",
-            error_message=f"Could not decode file as UTF-8: {path}",
-            started_at=started_at,
-            finished_at=utc_now_iso(),
-        )
+        raw = path.read_bytes()
     except OSError as exc:
-        return ToolResult(
+        return _result(
             ok=False,
             tool_name=request.tool_name,
-            execution_id=str(uuid4()),
             summary=f"Read failed: {exc}",
             error_code="os_error",
             error_message=str(exc),
+            data={"path": str(path)},
             started_at=started_at,
-            finished_at=utc_now_iso(),
+        )
+
+    if len(raw) > MAX_READ_BYTES:
+        return _result(
+            ok=False,
+            tool_name=request.tool_name,
+            summary=f"Read failed: file too large: {path}",
+            error_code="file_too_large",
+            error_message=f"File exceeds MAX_READ_BYTES={MAX_READ_BYTES}",
+            data={"path": str(path), "size_bytes": len(raw)},
+            started_at=started_at,
+        )
+
+    try:
+        content = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return _result(
+            ok=False,
+            tool_name=request.tool_name,
+            summary=f"Read failed: file is not valid UTF-8 text: {path}",
+            error_code="decode_error",
+            error_message=f"Could not decode file as UTF-8: {path}",
+            data={"path": str(path)},
+            started_at=started_at,
         )
 
     preview = content if len(content) <= 500 else content[:500] + "\n... [truncated]"
-    return ToolResult(
+
+    return _result(
         ok=True,
         tool_name=request.tool_name,
-        execution_id=str(uuid4()),
         summary=f"Read {path}\n{preview}",
         data={
             "path": str(path),
             "content": content,
-            "size_bytes": size_bytes,
+            "size_bytes": path.stat().st_size,
         },
         started_at=started_at,
-        finished_at=utc_now_iso(),
     )
 
 
 def write_file_tool(request: ToolRequest) -> ToolResult:
     started_at = utc_now_iso()
-    path, error = _resolve_target_path(request.tool_name, request, started_at)
+    path, workspace_root, error = _resolve_target_path(request.tool_name, request, started_at)
     if error is not None:
         return error
     assert path is not None
 
-    content_value = request.arguments.get("content")
-    if not isinstance(content_value, str):
-        return ToolResult(
+    content = request.arguments.get("content")
+    if not isinstance(content, str):
+        return _result(
             ok=False,
             tool_name=request.tool_name,
-            execution_id=str(uuid4()),
             summary="Write failed: invalid content.",
             error_code="invalid_content",
             error_message="Tool argument 'content' must be a string.",
+            data={"path": str(path)},
             started_at=started_at,
-            finished_at=utc_now_iso(),
         )
 
     if path.exists() and not path.is_file():
-        return ToolResult(
+        return _result(
             ok=False,
             tool_name=request.tool_name,
-            execution_id=str(uuid4()),
             summary=f"Write failed: not a file: {path}",
             error_code="not_a_file",
             error_message=f"Path is not a regular file: {path}",
+            data={
+                "path": str(path),
+                "workspace_root": str(workspace_root) if workspace_root else None,
+            },
             started_at=started_at,
-            finished_at=utc_now_iso(),
         )
 
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content_value, encoding="utf-8")
+        path.write_text(content, encoding="utf-8")
     except OSError as exc:
-        return ToolResult(
+        return _result(
             ok=False,
             tool_name=request.tool_name,
-            execution_id=str(uuid4()),
             summary=f"Write failed: {exc}",
             error_code="os_error",
             error_message=str(exc),
+            data={"path": str(path)},
             started_at=started_at,
-            finished_at=utc_now_iso(),
         )
 
-    return ToolResult(
+    return _result(
         ok=True,
         tool_name=request.tool_name,
-        execution_id=str(uuid4()),
         summary=f"Wrote {path}",
         data={
             "path": str(path),
-            "content": content_value,
+            "content": content,
             "size_bytes": path.stat().st_size,
         },
         started_at=started_at,
-        finished_at=utc_now_iso(),
     )
+
 
 def list_workspace_tool(request: ToolRequest) -> ToolResult:
     started_at = utc_now_iso()
+    workspace_root_value = request.arguments.get("workspace_root")
 
-    workspace_root = _resolve_workspace_root(request.arguments.get("workspace_root"))
-    if workspace_root is None:
-        return ToolResult(
+    if not isinstance(workspace_root_value, str) or not workspace_root_value.strip():
+        return _result(
             ok=False,
             tool_name=request.tool_name,
-            execution_id=str(uuid4()),
-            summary="List failed: no workspace root configured.",
+            summary="List failed: workspace root is required.",
             error_code="no_workspace_root",
-            error_message="workspace_root argument is required for list_workspace.",
+            error_message="Tool argument 'workspace_root' must be provided.",
             started_at=started_at,
-            finished_at=utc_now_iso(),
         )
 
-    if not workspace_root.exists():
-        return ToolResult(
+    root = Path(workspace_root_value).expanduser().resolve(strict=False)
+
+    if not root.exists():
+        return _result(
             ok=False,
             tool_name=request.tool_name,
-            execution_id=str(uuid4()),
-            summary=f"List failed: workspace not found: {workspace_root}",
+            summary=f"List failed: workspace root not found: {root}",
             error_code="workspace_not_found",
-            error_message=f"Workspace root does not exist: {workspace_root}",
+            error_message=f"Workspace root does not exist: {root}",
+            data={"workspace_root": str(root)},
             started_at=started_at,
-            finished_at=utc_now_iso(),
+        )
+
+    if not root.is_dir():
+        return _result(
+            ok=False,
+            tool_name=request.tool_name,
+            summary=f"List failed: workspace root is not a directory: {root}",
+            error_code="workspace_not_directory",
+            error_message=f"Workspace root is not a directory: {root}",
+            data={"workspace_root": str(root)},
+            started_at=started_at,
         )
 
     try:
-        files = []
-        truncated = False
-        for p in sorted(workspace_root.rglob("*")):
-            if not p.is_file():
-                continue
-            files.append(str(p.relative_to(workspace_root)))
-            if len(files) >= MAX_WORKSPACE_FILES:
-                truncated = True
-                break
+        files = sorted(
+            str(p.relative_to(root)).replace("\\", "/")
+            for p in root.rglob("*")
+            if p.is_file()
+        )
     except OSError as exc:
-        return ToolResult(
+        return _result(
             ok=False,
             tool_name=request.tool_name,
-            execution_id=str(uuid4()),
             summary=f"List failed: {exc}",
             error_code="os_error",
             error_message=str(exc),
+            data={"workspace_root": str(root)},
             started_at=started_at,
-            finished_at=utc_now_iso(),
         )
 
-    listing = "\n".join(files) if files else "(empty)"
+    truncated = len(files) > MAX_WORKSPACE_FILES
+    visible_files = files[:MAX_WORKSPACE_FILES]
+
+    summary = "Workspace files:\n" + "\n".join(visible_files) if visible_files else "Workspace is empty."
     if truncated:
-        listing += f"\n... [truncated at {MAX_WORKSPACE_FILES} files]"
-    summary = f"Workspace: {workspace_root}\n" + listing
-    return ToolResult(
+        summary += f"\n... truncated at {MAX_WORKSPACE_FILES} files"
+
+    return _result(
         ok=True,
         tool_name=request.tool_name,
-        execution_id=str(uuid4()),
         summary=summary,
-        data={"workspace_root": str(workspace_root), "files": files, "truncated": truncated},
+        data={
+            "workspace_root": str(root),
+            "files": visible_files,
+            "truncated": truncated,
+        },
         started_at=started_at,
-        finished_at=utc_now_iso(),
     )
