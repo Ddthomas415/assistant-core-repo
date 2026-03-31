@@ -782,3 +782,28 @@ def test_cli_pasted_lines_are_processed_one_line_at_a_time(tmp_path: Path) -> No
     stdout = result.stdout.lower()
     assert "check the path and try again." in stdout
     assert "which config file do you want me to use?" in stdout
+
+
+def test_cli_settings_routes_to_settings_alias(tmp_path: Path) -> None:
+    session_dir = tmp_path / "sessions"
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    (workspace_root / "settings.yaml").write_text("debug: true", encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "assistant.cli",
+            "--session-dir",
+            str(session_dir),
+            "--workspace-root",
+            str(workspace_root),
+        ],
+        input="settings\nexit\n",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert "debug: true" in result.stdout.lower()
