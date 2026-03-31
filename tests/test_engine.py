@@ -720,3 +720,18 @@ def test_engine_clarifies_bare_read_file_prompt() -> None:
     result = engine.handle_turn(state, "read file")
 
     assert result.route_decision.kind == RouteKind.CLARIFY
+
+def test_bare_read_file_clarification_reply_continues_into_read() -> None:
+    workspace = "workspace"
+    engine = Engine(workspace_root=workspace)
+    state = make_state()
+
+    result1 = engine.handle_turn(state, "read file")
+    assert result1.route_decision.kind == RouteKind.CLARIFY
+    assert state.pending_clarification is not None
+
+    result2 = engine.handle_turn(state, "notes.txt")
+
+    assert result2.route_decision.kind == RouteKind.TOOL
+    assert result2.route_decision.tool_request is not None
+    assert result2.route_decision.tool_request.tool_name == "read_file"

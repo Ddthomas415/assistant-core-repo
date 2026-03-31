@@ -657,6 +657,9 @@ class Engine:
         if original.rstrip(".?!") == "open the config file":
             return f"read {clarified_path}"
 
+        if original == "read file":
+            return f"read {clarified_path}"
+
         if original == "write the spec file":
             return f"overwrite {clarified_path}"
 
