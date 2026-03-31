@@ -155,3 +155,13 @@ Pattern:
 - remaining nearby variants still needing coverage are:
   - "what workspace tasks can you perform?"
   - "write file"
+
+## Session 10 — workspace-task and bare-write validation
+
+Result:
+- "what workspace tasks can you perform?" returned a clear workspace capability summary
+- "write file" returned useful write/confirmation guidance
+
+Conclusion:
+- Session 9 prompt fixes are working in real CLI use
+- no new regression observed in this validation
