@@ -134,3 +134,24 @@ Pattern:
 - workspace-listing behavior is still too phrase-sensitive
 - exact help/capability prompts work
 - next coding slice should improve real workspace-listing variants only
+
+## Session 9 — workspace-task and bare-write validation
+
+Tasks intended: probe remaining nearby variants after folder/directory guidance fixes
+
+| # | input (exact) | actual output (brief) | expected | category | impact |
+|---|---|---|---|---|---|
+| 1 | "what workspace tasks can you perform?" | "That request is outside my current scope..." | workspace capability summary | output-confusing | medium |
+| 2 | "help me with local files" | useful local file guidance | same | — (passed) | — |
+| 3 | "list files" | useful workspace listing guidance | same | — (passed) | — |
+| 4 | "read file" | "[CLARIFY] Which file do you want me to read?" | same | — (passed) | — |
+| 5 | "notes.txt" | "Read failed: file not found: .../workspace/notes.txt" | missing-file failure is acceptable | — (passed) | — |
+| 6 | "write file" | "That request is outside my current scope..." | write guidance or clarification | output-confusing | medium |
+
+## Session 9 Conclusion
+
+Pattern:
+- recent help/list/read improvements are working
+- remaining nearby variants still needing coverage are:
+  - "what workspace tasks can you perform?"
+  - "write file"
