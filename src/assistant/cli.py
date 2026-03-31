@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 
 from assistant.engine import Engine
-from assistant.session import SessionNotFoundError, SessionStore
+from assistant.session import SessionCorruptError, SessionNotFoundError, SessionStore
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -39,6 +39,8 @@ def main() -> None:
             state = store.load(args.resume)
         except SessionNotFoundError as exc:
             raise SystemExit(str(exc))
+        except SessionCorruptError as exc:
+            raise SystemExit(f"Resume failed: {exc}")
     else:
         state = store.create()
 
