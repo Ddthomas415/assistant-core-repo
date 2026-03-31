@@ -340,7 +340,13 @@ def list_workspace_tool(request: ToolRequest) -> ToolResult:
     truncated = len(files) > MAX_WORKSPACE_FILES
     visible_files = files[:MAX_WORKSPACE_FILES]
 
-    summary = "Workspace files:\n" + "\n".join(visible_files) if visible_files else "Workspace is empty."
+    if visible_files:
+        file_count = len(visible_files)
+        noun = "file" if file_count == 1 else "files"
+        summary = f"Workspace files ({file_count} {noun}):\n" + "\n".join(visible_files)
+    else:
+        summary = "Workspace is empty."
+
     if truncated:
         summary += f"\n... truncated at {MAX_WORKSPACE_FILES} files"
 

@@ -159,7 +159,7 @@ def test_list_workspace_tool_returns_recursive_files(tmp_path: Path) -> None:
     assert result.ok is True
     assert result.data["files"] == ["a.txt", "sub/b.txt"]
     assert result.data["truncated"] is False
-    assert "Workspace files:" in result.summary
+    assert "Workspace files (" in result.summary
 
 
 def test_list_workspace_tool_reports_recursive_file_count_via_data(tmp_path: Path) -> None:
@@ -179,3 +179,42 @@ def test_list_workspace_tool_reports_recursive_file_count_via_data(tmp_path: Pat
     assert result.ok is True
     assert len(result.data["files"]) == 2
     assert result.data["truncated"] is False
+
+
+def test_list_workspace_tool_summary_includes_file_count(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "a.txt").write_text("a", encoding="utf-8")
+    sub = workspace / "sub"
+    sub.mkdir()
+    (sub / "b.txt").write_text("b", encoding="utf-8")
+
+    request = ToolRequest(
+        tool_name="list_workspace",
+        arguments={"workspace_root": str(workspace)},
+        user_facing_label="listing workspace",
+    )
+
+    result = list_workspace_tool(request)
+
+    assert result.ok is True
+    assert "workspace files" in result.summary.lower()
+    assert "2 files" in result.summary.lower()
+    assert "a.txt" in result.summary
+    assert "sub/b.txt" in result.summary
+
+
+def test_list_workspace_tool_empty_summary_is_clear(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    request = ToolRequest(
+        tool_name="list_workspace",
+        arguments={"workspace_root": str(workspace)},
+        user_facing_label="listing workspace",
+    )
+
+    result = list_workspace_tool(request)
+
+    assert result.ok is True
+    assert result.summary == "Workspace is empty."
