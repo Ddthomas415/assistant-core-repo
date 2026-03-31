@@ -735,3 +735,13 @@ def test_bare_read_file_clarification_reply_continues_into_read() -> None:
     assert result2.route_decision.kind == RouteKind.TOOL
     assert result2.route_decision.tool_request is not None
     assert result2.route_decision.tool_request.tool_name == "read_file"
+
+def test_engine_routes_workspace_listing_question_variant() -> None:
+    engine = Engine()
+    state = make_state()
+
+    result = engine.handle_turn(state, "what files are in my workspace?")
+
+    assert result.route_decision.kind == RouteKind.TOOL
+    assert result.route_decision.tool_request is not None
+    assert result.route_decision.tool_request.tool_name == "list_workspace"

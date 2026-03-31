@@ -476,8 +476,11 @@ class Engine:
 
         if normalized in {
             "what files are in my workspace",
+            "what files are in my workspace?",
             "show me my workspace files",
             "can you list everything in the workspace folder",
+            "can you list everything in the workspace folder?",
+            "list workspace files",
         }:
             arguments = {}
             if self.workspace_root is not None:
