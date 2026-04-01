@@ -30,3 +30,6 @@ jobs:
 
       - name: Run core contract checkpoint
         run: bash scripts/checkpoint_core_contract.sh
+
+      - name: Build package
+        run: python -m build
