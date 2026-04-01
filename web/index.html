@@ -1,0 +1,1181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>J.A.R.V.I.S.</title>
+<style>
+/* ── Variables ──────────────────────────────────────────────────────────── */
+:root {
+  --bg:        #00060d;
+  --bg2:       #000e1a;
+  --bg3:       #001525;
+  --cyan:      #00d4ff;
+  --cyan2:     #00aacc;
+  --cyan3:     #006688;
+  --cyan4:     rgba(0,212,255,0.08);
+  --cyan5:     rgba(0,212,255,0.04);
+  --glow:      0 0 8px rgba(0,212,255,0.6), 0 0 24px rgba(0,212,255,0.2);
+  --glow-sm:   0 0 4px rgba(0,212,255,0.5);
+  --border:    rgba(0,212,255,0.18);
+  --border2:   rgba(0,212,255,0.08);
+  --text:      #c8f0ff;
+  --text2:     #4a9ab5;
+  --text3:     #1f4d63;
+  --ok:        #00ff88;
+  --warn:      #ffaa00;
+  --err:       #ff3355;
+  --font:      'Courier New', monospace;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  height: 100dvh;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: 44px 1fr;
+  grid-template-columns: 260px 1fr 320px;
+  grid-template-areas:
+    "header header header"
+    "left   center right";
+  user-select: none;
+}
+
+/* ── Scanline overlay ───────────────────────────────────────────────────── */
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  background: repeating-linear-gradient(
+    0deg, transparent, transparent 2px,
+    rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px
+  );
+  pointer-events: none;
+  z-index: 1000;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+header {
+  grid-area: header;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(90deg, var(--bg2) 0%, var(--bg) 100%);
+  gap: 24px;
+}
+.logo {
+  font-size: 16px;
+  font-weight: bold;
+  letter-spacing: 6px;
+  color: var(--cyan);
+  text-shadow: var(--glow);
+}
+.logo span { color: var(--text2); font-size: 11px; letter-spacing: 2px; display: block; }
+.h-sep { flex: 1; }
+.h-item {
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  color: var(--text2);
+  text-transform: uppercase;
+}
+.h-item b { color: var(--cyan); font-weight: normal; }
+.status-dot {
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 6px var(--ok);
+  margin-right: 6px;
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+@keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+/* ── Panel base ─────────────────────────────────────────────────────────── */
+.panel {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  position: relative;
+  overflow: hidden;
+}
+.panel::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+}
+.panel-title {
+  font-size: 9px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--text2);
+  padding: 8px 12px 4px;
+  border-bottom: 1px solid var(--border2);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.panel-title::before {
+  content: '◈';
+  color: var(--cyan);
+  font-size: 8px;
+}
+
+/* ── Left column ────────────────────────────────────────────────────────── */
+.left {
+  grid-area: left;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 8px 10px 10px;
+  overflow: hidden;
+}
+
+/* System stats */
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 3px 12px;
+  font-size: 11px;
+}
+.stat-label { color: var(--text2); letter-spacing: 1px; }
+.stat-val   { color: var(--cyan); font-size: 12px; text-shadow: var(--glow-sm); }
+.bar-wrap   { padding: 2px 12px 5px; }
+.bar-track  {
+  height: 3px;
+  background: var(--bg3);
+  border-radius: 1px;
+  overflow: hidden;
+}
+.bar-fill {
+  height: 100%;
+  border-radius: 1px;
+  background: linear-gradient(90deg, var(--cyan3), var(--cyan));
+  box-shadow: 0 0 4px var(--cyan);
+  transition: width 0.8s ease;
+}
+.bar-fill.warn { background: linear-gradient(90deg, #885500, var(--warn)); box-shadow: 0 0 4px var(--warn); }
+.bar-fill.err  { background: linear-gradient(90deg, #880022, var(--err));  box-shadow: 0 0 4px var(--err); }
+
+/* Gauges row */
+.gauges {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 4px;
+  padding: 6px 10px;
+}
+.gauge {
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 2px;
+  padding: 6px 4px;
+  text-align: center;
+}
+.gauge-val  { font-size: 14px; color: var(--cyan); text-shadow: var(--glow-sm); }
+.gauge-lbl  { font-size: 8px; color: var(--text3); letter-spacing: 1px; margin-top: 2px; }
+
+/* Uptime */
+.uptime-val {
+  font-size: 22px;
+  color: var(--cyan);
+  text-align: center;
+  padding: 8px;
+  text-shadow: var(--glow);
+  letter-spacing: 2px;
+}
+.uptime-sub {
+  display: flex;
+  justify-content: space-around;
+  padding: 0 8px 8px;
+  font-size: 9px;
+  color: var(--text3);
+  letter-spacing: 1px;
+}
+.uptime-sub span { text-align: center; }
+.uptime-sub b { display: block; font-size: 13px; color: var(--text2); font-weight: normal; }
+
+/* Session log */
+.log-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.log-entry {
+  font-size: 9px;
+  color: var(--text3);
+  letter-spacing: 0.5px;
+  padding: 2px 0;
+  border-bottom: 1px solid var(--border2);
+  display: flex;
+  gap: 6px;
+}
+.log-entry .log-time { color: var(--text3); flex-shrink: 0; }
+.log-entry .log-msg  { color: var(--text2); }
+.log-entry.ok .log-msg  { color: var(--ok); }
+.log-entry.err .log-msg { color: var(--err); }
+
+/* Memory */
+.memory-facts {
+  max-height: 120px;
+  overflow-y: auto;
+  padding: 4px 10px;
+}
+.memory-fact {
+  font-size: 9px;
+  color: var(--text2);
+  padding: 3px 0;
+  border-bottom: 1px solid var(--border2);
+  letter-spacing: 0.3px;
+  display: flex; gap: 6px; align-items: flex-start;
+}
+.memory-fact::before { content: '›'; color: var(--cyan); flex-shrink: 0; }
+
+/* ── Center ─────────────────────────────────────────────────────────────── */
+.center {
+  grid-area: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Hex grid background */
+.center::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image:
+    radial-gradient(circle at center, rgba(0,212,255,0.03) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* Arc reactor / orb */
+.reactor {
+  position: relative;
+  width: 240px;
+  height: 240px;
+  flex-shrink: 0;
+}
+.reactor-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+}
+.r1 { width: 240px; height: 240px; border-color: rgba(0,212,255,0.12); animation: spin 30s linear infinite; }
+.r2 { width: 200px; height: 200px; border-color: rgba(0,212,255,0.18); animation: spin 20s linear infinite reverse; }
+.r3 { width: 160px; height: 160px; border-color: rgba(0,212,255,0.25); animation: spin 12s linear infinite; }
+.r4 { width: 120px; height: 120px; border-color: rgba(0,212,255,0.35); animation: spin 8s linear infinite reverse; }
+.r5 { width: 80px;  height: 80px;  border-color: rgba(0,212,255,0.5);  animation: spin 5s linear infinite; }
+
+/* Tick marks on outer ring */
+.r1::before, .r2::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 50%;
+  width: 1px; height: 10px;
+  background: var(--cyan);
+  transform: translateX(-50%);
+  box-shadow: var(--glow-sm);
+}
+
+/* Inner glow core */
+.reactor-core {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 60px; height: 60px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0,212,255,0.8) 0%, rgba(0,100,180,0.3) 40%, transparent 70%);
+  box-shadow: 0 0 20px rgba(0,212,255,0.6), 0 0 60px rgba(0,212,255,0.2), inset 0 0 20px rgba(0,212,255,0.4);
+  animation: core-pulse 2s ease-in-out infinite;
+}
+.reactor-core.listening {
+  animation: core-listen 0.5s ease-in-out infinite alternate;
+}
+@keyframes spin       { to { transform: translate(-50%,-50%) rotate(360deg); } }
+@keyframes core-pulse { 0%,100%{box-shadow:0 0 20px rgba(0,212,255,0.6),0 0 60px rgba(0,212,255,0.2),inset 0 0 20px rgba(0,212,255,0.4)} 50%{box-shadow:0 0 30px rgba(0,212,255,0.9),0 0 80px rgba(0,212,255,0.35),inset 0 0 30px rgba(0,212,255,0.6)} }
+@keyframes core-listen{ from{box-shadow:0 0 20px rgba(0,212,255,0.6),0 0 60px rgba(0,212,255,0.2),inset 0 0 20px rgba(0,212,255,0.4)} to{box-shadow:0 0 40px rgba(0,212,255,1),0 0 100px rgba(0,212,255,0.5),inset 0 0 40px rgba(0,212,255,0.8)} }
+
+/* Voice bars */
+.voice-bars {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 32px;
+}
+.v-bar {
+  width: 3px;
+  background: var(--cyan);
+  border-radius: 2px;
+  box-shadow: var(--glow-sm);
+  height: 4px;
+  transition: height 0.1s;
+}
+.voice-bars.active .v-bar { animation: voice-wave 0.6s ease-in-out infinite; }
+.v-bar:nth-child(1)  { animation-delay: 0.0s; }
+.v-bar:nth-child(2)  { animation-delay: 0.07s; }
+.v-bar:nth-child(3)  { animation-delay: 0.14s; }
+.v-bar:nth-child(4)  { animation-delay: 0.21s; }
+.v-bar:nth-child(5)  { animation-delay: 0.28s; }
+.v-bar:nth-child(6)  { animation-delay: 0.21s; }
+.v-bar:nth-child(7)  { animation-delay: 0.14s; }
+.v-bar:nth-child(8)  { animation-delay: 0.07s; }
+.v-bar:nth-child(9)  { animation-delay: 0.0s; }
+@keyframes voice-wave { 0%,100%{height:4px} 50%{height:28px} }
+
+/* Center label */
+.reactor-label {
+  font-size: 11px;
+  letter-spacing: 6px;
+  color: var(--cyan);
+  text-shadow: var(--glow);
+  text-transform: uppercase;
+  text-align: center;
+}
+.reactor-status {
+  font-size: 9px;
+  letter-spacing: 3px;
+  color: var(--text2);
+  text-align: center;
+  text-transform: uppercase;
+}
+
+/* Center input bar */
+.center-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 480px;
+  padding: 0 20px;
+}
+.c-input {
+  flex: 1;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  color: var(--cyan);
+  font-family: var(--font);
+  font-size: 12px;
+  padding: 10px 14px;
+  outline: none;
+  letter-spacing: 1px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.c-input:focus { border-color: var(--cyan); box-shadow: var(--glow-sm); }
+.c-input::placeholder { color: var(--text3); }
+.c-btn {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  color: var(--cyan);
+  font-family: var(--font);
+  font-size: 11px;
+  padding: 10px 16px;
+  letter-spacing: 2px;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.c-btn:hover    { background: var(--cyan4); box-shadow: var(--glow-sm); }
+.c-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.c-btn.icon     { padding: 10px 12px; font-size: 14px; }
+
+/* ── Right column ───────────────────────────────────────────────────────── */
+.right {
+  grid-area: right;
+  display: flex;
+  flex-direction: column;
+  padding: 10px 10px 10px 8px;
+  gap: 0;
+  border-left: 1px solid var(--border);
+  overflow: hidden;
+}
+
+/* Chat messages */
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.chat-empty {
+  text-align: center;
+  padding: 40px 20px;
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 2px;
+  line-height: 2;
+}
+.msg-user {
+  align-self: flex-end;
+  max-width: 90%;
+}
+.msg-user .bubble {
+  background: var(--bg3);
+  border: 1px solid var(--cyan3);
+  border-right: 2px solid var(--cyan);
+  padding: 8px 12px;
+  font-size: 11px;
+  color: var(--text);
+  letter-spacing: 0.5px;
+  line-height: 1.6;
+  border-radius: 1px;
+  white-space: pre-wrap; word-break: break-word;
+}
+.msg-assistant {
+  align-self: flex-start;
+  max-width: 95%;
+}
+.msg-assistant .bubble {
+  background: var(--cyan5);
+  border: 1px solid var(--border2);
+  border-left: 2px solid var(--cyan);
+  padding: 8px 12px;
+  font-size: 11px;
+  color: var(--text);
+  letter-spacing: 0.5px;
+  line-height: 1.6;
+  border-radius: 1px;
+  white-space: pre-wrap; word-break: break-word;
+}
+.msg-label {
+  font-size: 8px;
+  letter-spacing: 2px;
+  color: var(--text3);
+  margin-bottom: 3px;
+  text-transform: uppercase;
+}
+.msg-user .msg-label    { text-align: right; }
+.msg-assistant .msg-label { color: var(--cyan3); }
+
+/* Tool pill */
+.tool-pill {
+  align-self: flex-start;
+  background: rgba(0,100,80,0.15);
+  border: 1px solid rgba(0,255,136,0.2);
+  border-left: 2px solid var(--ok);
+  padding: 5px 10px;
+  font-size: 10px;
+  color: var(--ok);
+  letter-spacing: 1px;
+  border-radius: 1px;
+  max-width: 95%;
+}
+.tool-pill.fail { border-left-color: var(--err); color: var(--err); background: rgba(255,0,50,0.08); border-color: rgba(255,0,50,0.2); }
+
+/* Confirm buttons */
+.confirm-row { display: flex; gap: 8px; margin-top: 6px; }
+.conf-btn {
+  font-family: var(--font);
+  font-size: 9px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 6px 14px;
+  border-radius: 1px;
+  cursor: pointer;
+  border: 1px solid;
+  transition: background 0.12s;
+}
+.conf-btn.yes    { border-color: var(--ok);  color: var(--ok);  background: rgba(0,255,136,0.08); }
+.conf-btn.yes:hover    { background: rgba(0,255,136,0.18); }
+.conf-btn.cancel { border-color: var(--err); color: var(--err); background: rgba(255,51,85,0.08); }
+.conf-btn.cancel:hover { background: rgba(255,51,85,0.18); }
+
+/* Typing */
+.typing-indicator {
+  align-self: flex-start;
+  display: flex; align-items: center; gap: 4px;
+  padding: 8px 12px;
+  background: var(--cyan5);
+  border: 1px solid var(--border2);
+  border-left: 2px solid var(--cyan);
+}
+.t-dot {
+  width: 4px; height: 4px; border-radius: 50%;
+  background: var(--cyan);
+  animation: tdot 1s ease-in-out infinite;
+}
+.t-dot:nth-child(2) { animation-delay: 0.2s; }
+.t-dot:nth-child(3) { animation-delay: 0.4s; }
+@keyframes tdot { 0%,60%,100%{transform:scale(1);opacity:.3} 30%{transform:scale(1.4);opacity:1} }
+
+/* Sessions list under chat */
+.session-section {
+  border-top: 1px solid var(--border2);
+  padding: 6px 4px 0;
+  max-height: 120px;
+  overflow-y: auto;
+}
+.session-title {
+  font-size: 8px;
+  letter-spacing: 3px;
+  color: var(--text3);
+  text-transform: uppercase;
+  padding: 4px 4px 6px;
+  display: flex; align-items: center; gap: 6px; cursor: pointer;
+}
+.session-title:hover { color: var(--text2); }
+.s-item {
+  padding: 5px 6px;
+  font-size: 9px;
+  color: var(--text3);
+  cursor: pointer;
+  border-radius: 1px;
+  letter-spacing: 0.5px;
+  display: flex; gap: 6px;
+  border-left: 1px solid transparent;
+  transition: all 0.1s;
+}
+.s-item:hover         { color: var(--text2); border-left-color: var(--cyan3); background: var(--cyan5); }
+.s-item.active        { color: var(--cyan); border-left-color: var(--cyan); background: var(--cyan4); }
+.s-preview            { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.s-count              { color: var(--text3); flex-shrink: 0; }
+
+/* ── Boot screen ────────────────────────────────────────────────────────── */
+#boot {
+  position: fixed; inset: 0;
+  background: var(--bg);
+  z-index: 9999;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 12px;
+}
+.boot-logo {
+  font-size: 32px;
+  letter-spacing: 16px;
+  color: var(--cyan);
+  text-shadow: var(--glow);
+  opacity: 0;
+  animation: boot-appear 0.6s ease forwards 0.4s;
+}
+.boot-sub {
+  font-size: 11px;
+  letter-spacing: 4px;
+  color: var(--text2);
+  opacity: 0;
+  animation: boot-appear 0.6s ease forwards 0.9s;
+}
+.boot-bar-wrap {
+  width: 300px;
+  height: 2px;
+  background: var(--bg3);
+  border-radius: 1px;
+  overflow: hidden;
+  opacity: 0;
+  animation: boot-appear 0.3s ease forwards 1.2s;
+}
+.boot-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--cyan3), var(--cyan));
+  box-shadow: var(--glow);
+  width: 0%;
+  animation: boot-fill 1.4s ease forwards 1.4s;
+}
+.boot-lines {
+  font-size: 9px;
+  color: var(--text3);
+  letter-spacing: 1px;
+  text-align: center;
+  line-height: 2;
+  opacity: 0;
+  animation: boot-appear 0.3s ease forwards 1.5s;
+}
+@keyframes boot-appear { to { opacity: 1; } }
+@keyframes boot-fill   { to { width: 100%; } }
+
+/* ── Scrollbar ──────────────────────────────────────────────────────────── */
+::-webkit-scrollbar       { width: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--cyan3); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- Boot screen -->
+<div id="boot">
+  <div class="boot-logo">J.A.R.V.I.S.</div>
+  <div class="boot-sub">JUST A RATHER VERY INTELLIGENT SYSTEM</div>
+  <div class="boot-bar-wrap"><div class="boot-bar"></div></div>
+  <div class="boot-lines">
+    INITIALIZING NEURAL INTERFACE...<br>
+    LOADING ASSISTANT CORE...<br>
+    ESTABLISHING SECURE CONNECTION...
+  </div>
+</div>
+
+<!-- Header -->
+<header>
+  <div class="logo">J.A.R.V.I.S. <span>ASSISTANT INTERFACE v1.0</span></div>
+  <div class="h-item"><span class="status-dot"></span><b id="h-status">ONLINE</b></div>
+  <div class="h-sep"></div>
+  <div class="h-item">SESSION <b id="h-session">—</b></div>
+  <div class="h-item" id="h-clock"></div>
+  <div class="h-item" id="h-date"></div>
+</header>
+
+<!-- Left column -->
+<div class="left">
+
+  <!-- System stats -->
+  <div class="panel">
+    <div class="panel-title">System Status</div>
+    <div class="stat-row"><span class="stat-label">CPU</span><span class="stat-val" id="s-cpu">—</span></div>
+    <div class="bar-wrap"><div class="bar-track"><div class="bar-fill" id="b-cpu" style="width:0%"></div></div></div>
+    <div class="stat-row"><span class="stat-label">MEMORY</span><span class="stat-val" id="s-mem">—</span></div>
+    <div class="bar-wrap"><div class="bar-track"><div class="bar-fill" id="b-mem" style="width:0%"></div></div></div>
+    <div class="stat-row"><span class="stat-label">DISK</span><span class="stat-val" id="s-disk">—</span></div>
+    <div class="bar-wrap"><div class="bar-track"><div class="bar-fill" id="b-disk" style="width:0%"></div></div></div>
+    <div class="gauges">
+      <div class="gauge"><div class="gauge-val" id="g-cpu">—</div><div class="gauge-lbl">CPU %</div></div>
+      <div class="gauge"><div class="gauge-val" id="g-mem-gb">—</div><div class="gauge-lbl">MEM GB</div></div>
+      <div class="gauge"><div class="gauge-val" id="g-disk-gb">—</div><div class="gauge-lbl">DISK GB</div></div>
+    </div>
+  </div>
+
+
+  <!-- Weather widget -->
+  <div class="panel" id="weather-panel">
+    <div class="panel-title">Weather</div>
+    <div style="padding:8px 12px;font-size:11px;color:var(--text2);letter-spacing:0.5px" id="weather-condition">—</div>
+    <div style="padding:2px 12px 4px;font-size:20px;color:var(--cyan);text-shadow:var(--glow);letter-spacing:1px" id="weather-temp">—</div>
+    <div class="gauges" style="padding:4px 10px 8px">
+      <div class="gauge"><div class="gauge-val" id="w-feels">—</div><div class="gauge-lbl">FEELS</div></div>
+      <div class="gauge"><div class="gauge-val" id="w-humidity">—</div><div class="gauge-lbl">HUMID %</div></div>
+      <div class="gauge"><div class="gauge-val" id="w-wind">—</div><div class="gauge-lbl">WIND KPH</div></div>
+    </div>
+    <div style="padding:0 12px 6px;font-size:9px;color:var(--text3);letter-spacing:1px" id="w-location">LOCATING...</div>
+  </div>
+
+  <!-- Uptime -->
+  <div class="panel">
+    <div class="panel-title">System Uptime</div>
+    <div class="uptime-val" id="uptime-val">00:00:00</div>
+    <div class="uptime-sub">
+      <span><b id="u-sessions">0</b>SESSIONS</span>
+      <span><b id="u-commands">0</b>COMMANDS</span>
+      <span><b id="u-tools">0</b>TOOLS</span>
+    </div>
+  </div>
+
+  <!-- Memory facts -->
+  <div class="panel" style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+    <div class="panel-title" style="cursor:pointer" onclick="toggleMemory()">
+      <span id="mem-toggle">▸</span>&nbsp;Long-term Memory
+    </div>
+    <div class="memory-facts" id="memory-facts" style="display:none">
+      <div style="font-size:9px;color:var(--text3);padding:6px 0">NO DATA</div>
+    </div>
+  </div>
+
+  <!-- Activity log -->
+  <div class="panel" style="flex:2;overflow:hidden;display:flex;flex-direction:column">
+    <div class="panel-title">Activity Log</div>
+    <div class="log-list" id="log-list"></div>
+  </div>
+
+</div>
+
+<!-- Center -->
+<div class="center">
+
+  <!-- Arc reactor -->
+  <div class="reactor">
+    <div class="reactor-ring r1"></div>
+    <div class="reactor-ring r2"></div>
+    <div class="reactor-ring r3"></div>
+    <div class="reactor-ring r4"></div>
+    <div class="reactor-ring r5"></div>
+    <div class="reactor-core" id="reactor-core"></div>
+  </div>
+
+  <!-- Voice visualizer -->
+  <div class="voice-bars" id="voice-bars">
+    <div class="v-bar"></div><div class="v-bar"></div><div class="v-bar"></div>
+    <div class="v-bar"></div><div class="v-bar"></div><div class="v-bar"></div>
+    <div class="v-bar"></div><div class="v-bar"></div><div class="v-bar"></div>
+  </div>
+
+  <div class="reactor-label">NEURAL LINK ACTIVE</div>
+  <div class="reactor-status" id="reactor-status">AWAITING INPUT</div>
+
+  <!-- Input -->
+  <div class="center-input">
+    <button class="c-btn icon" id="mic-btn" title="Voice input">🎤</button>
+    <input class="c-input" id="msg-input" type="text"
+           placeholder="ENTER COMMAND..." autocomplete="off" spellcheck="false">
+    <button class="c-btn icon" id="tts-btn" title="Voice output">🔇</button>
+    <button class="c-btn" id="send-btn">SEND</button>
+  </div>
+
+  <button class="c-btn" onclick="newSession()" style="font-size:9px;padding:5px 16px;letter-spacing:3px">
+    ◈ NEW SESSION
+  </button>
+
+</div>
+
+<!-- Right column -->
+<div class="right">
+  <div class="panel-title" style="padding:8px 4px">Neural Link — Conversation</div>
+
+  <div class="chat-messages" id="chat-messages">
+    <div class="chat-empty" id="chat-empty">
+      NEURAL LINK STANDBY<br>
+      AWAITING COMMAND INPUT<br><br>
+      <span style="color:var(--cyan3)">TYPE OR SPEAK TO BEGIN</span>
+    </div>
+  </div>
+
+  <div class="session-section">
+    <div class="session-title" onclick="toggleSessions()">
+      <span id="sess-toggle">▸</span> SESSION ARCHIVE
+    </div>
+    <div id="session-list" style="display:none"></div>
+  </div>
+</div>
+
+<script>
+const API     = 'http://localhost:8000';
+const API_KEY = '';
+const USE_STREAMING = true;
+let TTS_ENABLED = false;
+
+let sessionId     = null;
+let commandCount  = 0;
+let toolCount     = 0;
+let sessionCount  = 0;
+let serverUptimeS = 0;
+let memoryOpen    = false;
+let sessionsOpen  = false;
+
+const $ = id => document.getElementById(id);
+
+// ── Auth headers ──────────────────────────────────────────────────────────
+function h(extra = {}) {
+  const hh = { 'Content-Type': 'application/json', ...extra };
+  if (API_KEY) hh['Authorization'] = `Bearer ${API_KEY}`;
+  return hh;
+}
+async function apiFetch(url, opts = {}) {
+  opts.headers = h(opts.headers || {});
+  const r = await fetch(url, opts);
+  if (!r.ok) {
+    let d = `Server error ${r.status}`;
+    try { const j = await r.json(); d = j.detail || j.error || d; } catch {}
+    throw new Error(d);
+  }
+  return r;
+}
+
+// ── Clock ─────────────────────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  $('h-clock').textContent = now.toLocaleTimeString('en-US', {hour12:false});
+  $('h-date').textContent  = now.toLocaleDateString('en-US', {month:'short', day:'2-digit', year:'numeric'}).toUpperCase();
+}
+setInterval(updateClock, 1000); updateClock();
+
+// ── System stats ─────────────────────────────────────────────────────────
+function setBar(id, pct) {
+  const el = $(id);
+  el.style.width = pct + '%';
+  el.className = 'bar-fill' + (pct > 85 ? ' err' : pct > 65 ? ' warn' : '');
+}
+async function fetchSystem() {
+  try {
+    const r = await apiFetch(`${API}/system`);
+    const d = await r.json();
+    if (d.error) return;
+    $('s-cpu').textContent  = d.cpu_percent + '%';
+    $('s-mem').textContent  = d.mem_used_gb + ' / ' + d.mem_total_gb + ' GB';
+    $('s-disk').textContent = d.disk_used_gb + ' / ' + d.disk_total_gb + ' GB';
+    $('g-cpu').textContent  = d.cpu_percent;
+    $('g-mem-gb').textContent  = d.mem_used_gb;
+    $('g-disk-gb').textContent = d.disk_used_gb;
+    setBar('b-cpu',  d.cpu_percent);
+    setBar('b-mem',  d.mem_percent);
+    setBar('b-disk', d.disk_percent);
+    serverUptimeS = d.uptime_seconds;
+  } catch {}
+}
+setInterval(fetchSystem, 4000); fetchSystem();
+
+  async function fetchWeather() {
+    try {
+      const r = await apiFetch(`${API}/weather`);
+      const d = await r.json();
+      if (d.error) return;
+      $('weather-condition').textContent = d.condition;
+      $('weather-temp').textContent = d.temperature_c + '°C';
+      $('w-feels').textContent = d.feels_like_c + '°';
+      $('w-humidity').textContent = d.humidity;
+      $('w-wind').textContent = d.wind_kph;
+      $('w-location').textContent = d.location || 'LOCAL';
+    } catch {}
+  }
+  setInterval(fetchWeather, 300000); fetchWeather();
+
+
+
+// ── Uptime counter ────────────────────────────────────────────────────────
+function fmtUptime(s) {
+  const h = String(Math.floor(s/3600)).padStart(2,'0');
+  const m = String(Math.floor((s%3600)/60)).padStart(2,'0');
+  const ss= String(s%60).padStart(2,'0');
+  return `${h}:${m}:${ss}`;
+}
+setInterval(() => {
+  if (serverUptimeS > 0) {
+    serverUptimeS++;
+    $('uptime-val').textContent = fmtUptime(serverUptimeS);
+  }
+}, 1000);
+
+// ── Health check ──────────────────────────────────────────────────────────
+async function checkHealth() {
+  try {
+    const r = await fetch(`${API}/health`);
+    const ok = r.ok;
+    $('h-status').textContent = ok ? 'ONLINE' : 'DEGRADED';
+    $('h-status').style.color = ok ? 'var(--ok)' : 'var(--warn)';
+    document.querySelector('.status-dot').style.background = ok ? 'var(--ok)' : 'var(--warn)';
+  } catch {
+    $('h-status').textContent = 'OFFLINE';
+    $('h-status').style.color = 'var(--err)';
+    document.querySelector('.status-dot').style.background = 'var(--err)';
+  }
+}
+setInterval(checkHealth, 10000); checkHealth();
+
+// ── Sessions ──────────────────────────────────────────────────────────────
+async function refreshSessions() {
+  try {
+    const r = await apiFetch(`${API}/sessions`);
+    const list = await r.json();
+    sessionCount = list.length;
+    $('u-sessions').textContent = sessionCount;
+    renderSessions(list);
+  } catch {}
+}
+function renderSessions(list) {
+  const el = $('session-list');
+  if (!list.length) { el.innerHTML = '<div style="font-size:9px;color:var(--text3);padding:4px 6px">NO SESSIONS</div>'; return; }
+  el.innerHTML = list.map(s => `
+    <div class="s-item ${s.session_id === sessionId ? 'active' : ''}"
+         onclick="openSession(${JSON.stringify(s.session_id)})">
+      <span class="s-preview">${esc(s.preview || '(EMPTY)')}</span>
+      <span class="s-count">${s.message_count}</span>
+    </div>`).join('');
+}
+async function openSession(id) {
+  try {
+    const r = await apiFetch(`${API}/sessions/${id}`);
+    const data = await r.json();
+    sessionId = id;
+    updateChip();
+    clearMessages();
+    data.messages.forEach(m => {
+      if (m.role === 'user') addUserBubble(m.content);
+      else if (m.role === 'assistant') addAsstBubble(m.content, {});
+    });
+    refreshSessions();
+    log(`SESSION RESUMED: ${id.slice(0,8)}...`, 'ok');
+  } catch(e) { log('SESSION LOAD FAILED', 'err'); }
+}
+function newSession() {
+  sessionId = null; commandCount = 0; toolCount = 0;
+  clearMessages(); updateChip(); refreshSessions();
+  log('NEW SESSION INITIALISED', 'ok');
+}
+
+// ── Sessions panel toggle ─────────────────────────────────────────────────
+function toggleSessions() {
+  sessionsOpen = !sessionsOpen;
+  $('session-list').style.display = sessionsOpen ? 'block' : 'none';
+  $('sess-toggle').textContent = sessionsOpen ? '▾' : '▸';
+  if (sessionsOpen) refreshSessions();
+}
+
+// ── Memory ────────────────────────────────────────────────────────────────
+async function refreshMemory() {
+  try {
+    const r = await apiFetch(`${API}/memory`);
+    const facts = await r.json();
+    renderMemory(facts);
+  } catch {}
+}
+function renderMemory(facts) {
+  const el = $('memory-facts');
+  if (!facts.length) { el.innerHTML = '<div style="font-size:9px;color:var(--text3);padding:6px 0">NO DATA</div>'; return; }
+  el.innerHTML = facts.map(f => `
+    <div class="memory-fact">${esc(f.content)}</div>`).join('');
+}
+function toggleMemory() {
+  memoryOpen = !memoryOpen;
+  $('memory-facts').style.display = memoryOpen ? 'block' : 'none';
+  $('mem-toggle').textContent = memoryOpen ? '▾' : '▸';
+  if (memoryOpen) refreshMemory();
+}
+
+// ── Activity log ──────────────────────────────────────────────────────────
+function log(msg, type = '') {
+  const el = $('log-list');
+  const t = new Date().toLocaleTimeString('en-US', {hour12:false});
+  const entry = document.createElement('div');
+  entry.className = 'log-entry ' + type;
+  entry.innerHTML = `<span class="log-time">${t}</span><span class="log-msg">${esc(msg)}</span>`;
+  el.prepend(entry);
+  while (el.children.length > 30) el.lastChild.remove();
+}
+
+// ── Chip / chip update ────────────────────────────────────────────────────
+function updateChip() {
+  $('h-session').textContent = sessionId ? sessionId.slice(0,8) + '...' : '—';
+  $('u-commands').textContent = commandCount;
+  $('u-tools').textContent    = toolCount;
+}
+
+// ── Messages ──────────────────────────────────────────────────────────────
+function clearMessages() {
+  $('chat-messages').innerHTML = '';
+  const empty = document.createElement('div');
+  empty.className = 'chat-empty';
+  empty.id = 'chat-empty';
+  empty.innerHTML = 'NEURAL LINK STANDBY<br>AWAITING COMMAND INPUT<br><br><span style="color:var(--cyan3)">TYPE OR SPEAK TO BEGIN</span>';
+  $('chat-messages').appendChild(empty);
+}
+function hideEmpty() { $('chat-empty') && $('chat-empty').remove(); }
+function scrollB()   { const el = $('chat-messages'); el.scrollTop = el.scrollHeight; }
+
+function addUserBubble(text) {
+  hideEmpty();
+  const d = document.createElement('div');
+  d.className = 'msg-user';
+  d.innerHTML = `<div class="msg-label">YOU</div><div class="bubble">${esc(text)}</div>`;
+  $('chat-messages').appendChild(d); scrollB();
+}
+function addAsstBubble(text, opts) {
+  hideEmpty();
+  const d = document.createElement('div');
+  d.className = 'msg-assistant';
+  let inner = `<div class="msg-label">J.A.R.V.I.S.</div><div class="bubble">${esc(text)}</div>`;
+  if (opts.confirm) {
+    inner += `<div class="confirm-row">
+      <button class="conf-btn yes" onclick="confirmReply('yes',this)">◈ CONFIRM</button>
+      <button class="conf-btn cancel" onclick="confirmReply('cancel',this)">✕ ABORT</button>
+    </div>`;
+  }
+  d.innerHTML = inner;
+  $('chat-messages').appendChild(d); scrollB();
+}
+function addToolPill(tool) {
+  hideEmpty();
+  const d = document.createElement('div');
+  d.className = 'tool-pill' + (tool.ok ? '' : ' fail');
+  const icon = tool.ok ? '⬡' : '✕';
+  d.textContent = `${icon} ${tool.tool_name?.toUpperCase() || ''} — ${tool.summary || ''}`;
+  $('chat-messages').appendChild(d); scrollB();
+}
+function addTyping() {
+  hideEmpty();
+  const d = document.createElement('div');
+  d.id = 'typing-ind'; d.className = 'typing-indicator';
+  d.innerHTML = '<div class="t-dot"></div><div class="t-dot"></div><div class="t-dot"></div>';
+  $('chat-messages').appendChild(d); scrollB();
+}
+function removeTyping() { $('typing-ind')?.remove(); }
+function showError(msg) {
+  hideEmpty();
+  const d = document.createElement('div');
+  d.className = 'msg-assistant';
+  d.innerHTML = `<div class="msg-label" style="color:var(--err)">ERROR</div><div class="bubble" style="border-left-color:var(--err);color:var(--err)">⚠ ${esc(msg)}</div>`;
+  $('chat-messages').appendChild(d); scrollB();
+}
+
+// ── Send ──────────────────────────────────────────────────────────────────
+let isWaiting = false;
+
+async function send(text) {
+  text = text.trim();
+  if (!text || isWaiting) return;
+  isWaiting = true;
+  $('send-btn').disabled = true;
+  setStatus('PROCESSING...');
+  $('reactor-core').classList.add('listening');
+  $('voice-bars').classList.add('active');
+  commandCount++;
+  updateChip();
+  addUserBubble(text);
+  addTyping();
+  log(`CMD: ${text.slice(0,40)}`);
+  try {
+    USE_STREAMING ? await sendStream(text) : await sendBlock(text);
+  } finally {
+    isWaiting = false;
+    $('send-btn').disabled = false;
+    $('reactor-core').classList.remove('listening');
+    $('voice-bars').classList.remove('active');
+    setStatus('AWAITING INPUT');
+    $('msg-input').focus();
+  }
+}
+
+async function sendBlock(text) {
+  try {
+    const r = await apiFetch(`${API}/chat`, { method:'POST', body: JSON.stringify({session_id: sessionId, message: text}) });
+    const data = await r.json();
+    removeTyping();
+    handleDone(data);
+  } catch(e) { removeTyping(); showError(e.message); log('ERROR: ' + e.message, 'err'); }
+}
+
+async function sendStream(text) {
+  try {
+    const r = await fetch(`${API}/chat/stream`, {
+      method: 'POST',
+      headers: h(),
+      body: JSON.stringify({session_id: sessionId, message: text}),
+    });
+    if (!r.ok) { removeTyping(); showError(`Error ${r.status}`); return; }
+    const reader = r.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, {stream:true});
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const ev = JSON.parse(line.slice(6));
+          if (ev.type === 'step') {
+            removeTyping();
+            addToolPill({ok:ev.ok, tool_name:ev.tool, summary:ev.summary});
+            addTyping();
+            toolCount++; updateChip();
+            log(`TOOL: ${ev.tool.toUpperCase()} — ${ev.summary.slice(0,35)}`, ev.ok?'ok':'err');
+          } else if (ev.type === 'done') {
+            removeTyping(); handleDone(ev);
+          } else if (ev.type === 'error') {
+            removeTyping(); showError(ev.detail); log('ERROR: ' + ev.detail, 'err');
+          }
+        } catch {}
+      }
+    }
+  } catch(e) { removeTyping(); showError(e.message); log('STREAM ERROR', 'err'); }
+}
+
+function handleDone(data) {
+  sessionId = data.session_id;
+  updateChip();
+  if (data.agent_steps?.length) {
+    data.agent_steps.forEach(s => { addToolPill({ok:s.ok, tool_name:s.tool, summary:s.summary}); toolCount++; });
+  } else if (data.tool_result) {
+    addToolPill(data.tool_result); toolCount++;
+  }
+  updateChip();
+  addAsstBubble(data.assistant_message, { confirm: !!data.pending_confirmation });
+  if (TTS_ENABLED) speakText(data.assistant_message);
+  refreshSessions();
+  log(`RESP: ${data.route_kind.toUpperCase()} [${data.planner_mode}]`, 'ok');
+}
+
+function confirmReply(reply, btn) {
+  btn.closest('.confirm-row').remove();
+  send(reply);
+}
+
+// ── Input ─────────────────────────────────────────────────────────────────
+$('send-btn').onclick = () => { const t = $('msg-input').value; $('msg-input').value = ''; send(t); };
+$('msg-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('send-btn').click(); }
+});
+
+// ── Status label ──────────────────────────────────────────────────────────
+function setStatus(s) { $('reactor-status').textContent = s; }
+
+// ── Voice input ───────────────────────────────────────────────────────────
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (SR) {
+  const rec = new SR();
+  rec.continuous = false; rec.interimResults = false;
+  rec.onresult = e => {
+    const transcript = e.results[0][0].transcript;
+    const input = $('msg-input');
+    input.value = transcript;
+    $('mic-btn').classList.remove('listening');
+    setStatus('AWAITING INPUT');
+
+    setTimeout(() => {
+      const form = input.closest('form');
+      if (form && typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+        return;
+      }
+
+      input.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'Enter',
+        code: 'Enter',
+        bubbles: true
+      }));
+    }, 50);
+  };
+  rec.onend    = () => { $('mic-btn').classList.remove('listening'); };
+  $('mic-btn').onclick = () => {
+    if ($('mic-btn').classList.contains('listening')) { rec.stop(); $('mic-btn').classList.remove('listening'); }
+    else { rec.start(); $('mic-btn').classList.add('listening'); setStatus('LISTENING...'); $('reactor-core').classList.add('listening'); }
+  };
+} else { $('mic-btn').style.opacity = '0.3'; $('mic-btn').title = 'Voice not supported'; }
+
+// ── TTS ───────────────────────────────────────────────────────────────────
+$('tts-btn').onclick = () => {
+  TTS_ENABLED = !TTS_ENABLED;
+  $('tts-btn').textContent = TTS_ENABLED ? '🔊' : '🔇';
+  $('tts-btn').style.borderColor = TTS_ENABLED ? 'var(--ok)' : '';
+  if (!TTS_ENABLED) speechSynthesis.cancel();
+};
+function speakText(text) {
+  if (!TTS_ENABLED || !('speechSynthesis' in window)) return;
+  speechSynthesis.cancel();
+  const clean = text.replace(/\[.*?\]\n*/g, '').trim().slice(0,500);
+  if (!clean) return;
+  const u = new SpeechSynthesisUtterance(clean);
+  u.rate = 1.05;
+  speechSynthesis.speak(u);
+}
+
+// ── Utilities ─────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Boot sequence ─────────────────────────────────────────────────────────
+setTimeout(() => {
+  const boot = $('boot');
+  boot.style.transition = 'opacity 0.8s';
+  boot.style.opacity = '0';
+  setTimeout(() => boot.remove(), 800);
+  refreshSessions();
+  log('SYSTEM ONLINE', 'ok');
+  log('NEURAL INTERFACE ACTIVE', 'ok');
+  log('ASSISTANT CORE LOADED', 'ok');
+}, 3200);
+</script>
+</body>
+</html>
