@@ -1,0 +1,5 @@
+prune tests
+exclude .env
+prune .venv
+prune dist
+prune build
