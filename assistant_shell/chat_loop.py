@@ -1,26 +1,44 @@
 from __future__ import annotations
 
-from core.router import route_user_message
-from core.tool_registry import execute_tool_request
-from core.types import PendingClarification, PendingConfirmation
+import argparse
+
+import os
+from server.chat_service import process_turn
 
 
-def run_chat_loop() -> None:
+def run_chat_loop(*, resume_session_id: str | None = None, enable_wake_word: bool = False) -> None:
     """
-    First assistant shell slice.
+    Assistant shell.
 
-    Thin shell only:
-    - in-memory pending clarification / confirmation
-    - routes through core.router
-    - prints direct answers, clarification prompts, confirmation prompts,
-      and visible tool previews
-    - does not execute real tools yet
+    All turn logic (routing, tool execution, session persistence,
+    pending clarification/confirmation) lives in server.chat_service.
+    This module is pure I/O: read input, call the service, print output.
+
+    enable_wake_word: start background wake word listener (needs pyaudio + SpeechRecognition).
     """
-    pending_clarification: PendingClarification | None = None
-    pending_confirmation: PendingConfirmation | None = None
+    session_id: str | None = resume_session_id
 
-    print("Assistant Shell v1")
+    if resume_session_id:
+        print(f"Assistant Shell — resuming session {resume_session_id}")
+    else:
+        print("Assistant Shell — new session")
     print("Type 'quit' to exit.\n")
+
+    if enable_wake_word:
+        try:
+            from core.wake import WakeWordDetector  # noqa: PLC0415
+            wake_phrase = os.getenv("WAKE_WORD", "jarvis")
+
+            def _on_wake():
+                print(f"\n[Wake word detected — listening...]")
+
+            detector = WakeWordDetector(on_wake=_on_wake, wake_phrase=wake_phrase)
+            if detector.start():
+                print(f"Wake word active: say \"{wake_phrase}\" to activate\n")
+            else:
+                print(f"Wake word unavailable: {detector.error}\n")
+        except Exception as e:
+            print(f"Wake word init failed: {e}\n")
 
     while True:
         try:
@@ -39,70 +57,31 @@ def run_chat_loop() -> None:
             print("Goodbye.")
             break
 
-        route, policy = route_user_message(
-            user_message,
-            pending_clarification=pending_clarification,
-            pending_confirmation=pending_confirmation,
-        )
+        turn = process_turn(session_id=session_id, message=user_message)
 
-        pending_clarification = None
-        pending_confirmation = None
+        # Pin the session for the rest of this conversation.
+        session_id = turn.session_id
 
-        if route.kind == "answer":
-            message = route.answer_text or "I don't have an answer yet."
+        print(f"\nassistant> {turn.assistant_message}\n")
 
-        elif route.kind == "clarify":
-            pending_clarification = PendingClarification(
-                clarification_id="in-memory-clarification",
-                created_at="now",
-                expires_at="later",
-                prompt=route.clarification_prompt or "Please clarify.",
-                target=route.clarification_target or "user_intent",
-                bound_user_request=user_message,
-                allowed_reply_kinds=[route.clarification_target or "user_intent"],
-            )
-            message = route.clarification_prompt or "Please clarify."
 
-        elif route.kind == "confirm":
-            pending_confirmation = PendingConfirmation(
-                confirmation_id="in-memory-confirmation",
-                action_id="in-memory-action",
-                created_at="now",
-                expires_at="later",
-                prompt=route.confirmation_prompt or "Please confirm.",
-                requested_action=route.requested_action,
-            )
-            message = route.confirmation_prompt or "Please confirm."
-
-        elif route.kind == "tool":
-            if route.tool_request is not None:
-                tool_result = execute_tool_request(route.tool_request)
-                header = f"[{route.tool_request.user_facing_label}...]"
-
-                if tool_result.ok:
-                    if tool_result.tool_name == "read_file":
-                        filename = tool_result.data.get("filename", "<unknown>")
-                        message = f"{header}\nRead request completed for {filename}."
-                    elif tool_result.tool_name == "list_workspace":
-                        message = f"{header}\nWorkspace listing request completed."
-                    else:
-                        message = f"{header}\n{tool_result.summary}"
-                else:
-                    message = (
-                        f"{header}\n"
-                        f"Tool failed: {tool_result.error_message or tool_result.summary}"
-                    )
-            else:
-                message = "[tool...]\nNo tool request was provided."
-
-        else:
-            message = "Unknown route."
-
-        if policy is not None:
-            message = f"{message}\n\n[policy: {policy.kind}] {policy.reason}"
-
-        print(f"\nassistant> {message}\n")
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Assistant shell")
+    parser.add_argument(
+        "--resume",
+        metavar="SESSION_ID",
+        default=None,
+        help="Resume an existing session by ID.",
+    )
+    parser.add_argument(
+        "--wake-word",
+        action="store_true",
+        default=False,
+        help="Enable wake word detection (requires pyaudio + SpeechRecognition).",
+    )
+    args = parser.parse_args()
+    run_chat_loop(resume_session_id=args.resume, enable_wake_word=args.wake_word)
 
 
 if __name__ == "__main__":
-    run_chat_loop()
+    main()

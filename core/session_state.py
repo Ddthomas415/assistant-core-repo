@@ -94,9 +94,23 @@ def save_session(session: PersistedSession) -> Path:
 
 
 def load_session(session_id: str) -> PersistedSession:
-    """Load a persisted session or raise SessionNotFoundError."""
+    """Load a persisted session or raise SessionNotFoundError.
+
+    Raises SessionNotFoundError for missing files and for files whose
+    JSON is corrupted so callers get a clean, predictable error type.
+    """
     path = _session_path(session_id)
     if not path.exists():
         raise SessionNotFoundError(f"Session not found: {session_id}")
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    return _deserialize_session(payload)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        raise SessionNotFoundError(
+            f"Session file is corrupted or unreadable: {session_id}"
+        ) from exc
+    try:
+        return _deserialize_session(payload)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise SessionNotFoundError(
+            f"Session schema is invalid (may be from an older version): {session_id}"
+        ) from exc

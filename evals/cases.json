@@ -1,0 +1,173 @@
+[
+  {
+    "id": "answer_informational",
+    "description": "Informational question routes to direct answer",
+    "message": "what can you do?",
+    "expect": {
+      "route_kind": "answer",
+      "tool_name": null,
+      "pending_clarification": false,
+      "pending_confirmation": false
+    }
+  },
+  {
+    "id": "tool_list_workspace",
+    "description": "List workspace runs automatically without confirmation",
+    "message": "list workspace files",
+    "expect": {
+      "route_kind": "answer",
+      "tool_name": "list_workspace",
+      "agent_steps_count": 1,
+      "pending_clarification": false,
+      "pending_confirmation": false,
+      "tool_ok": true
+    }
+  },
+  {
+    "id": "tool_read_file",
+    "description": "Read file runs automatically when filename is present",
+    "message": "read test.py",
+    "expect": {
+      "route_kind": "answer",
+      "tool_name": "read_file",
+      "agent_steps_count": 1,
+      "pending_clarification": false,
+      "pending_confirmation": false,
+      "tool_ok": true
+    }
+  },
+  {
+    "id": "clarify_read_no_filename",
+    "description": "Read without filename triggers clarification",
+    "message": "read",
+    "expect": {
+      "route_kind": "clarify",
+      "tool_name": null,
+      "pending_clarification": true,
+      "pending_confirmation": false
+    }
+  },
+  {
+    "id": "confirm_write_file",
+    "description": "Write file stops for confirmation before executing",
+    "message": "write output.py",
+    "expect": {
+      "route_kind": "confirm",
+      "tool_name": null,
+      "agent_steps_count": 0,
+      "pending_clarification": false,
+      "pending_confirmation": true
+    }
+  },
+  {
+    "id": "confirm_edit_file",
+    "description": "Edit file stops for confirmation before executing",
+    "message": "edit test.py",
+    "expect": {
+      "route_kind": "confirm",
+      "tool_name": null,
+      "agent_steps_count": 0,
+      "pending_clarification": false,
+      "pending_confirmation": true
+    }
+  },
+  {
+    "id": "confirm_write_then_yes",
+    "description": "Confirming a write executes the tool",
+    "chain": [
+      {
+        "message": "write output.py",
+        "expect": { "route_kind": "confirm", "pending_confirmation": true }
+      },
+      {
+        "message": "yes",
+        "expect": {
+          "route_kind": "answer",
+          "tool_name": "write_file",
+          "agent_steps_count": 1,
+          "pending_confirmation": false,
+          "tool_ok": true
+        }
+      }
+    ]
+  },
+  {
+    "id": "confirm_write_then_cancel",
+    "description": "Cancelling a confirmation does not execute the tool",
+    "chain": [
+      {
+        "message": "write output.py",
+        "expect": { "route_kind": "confirm", "pending_confirmation": true }
+      },
+      {
+        "message": "cancel",
+        "expect": {
+          "route_kind": "answer",
+          "tool_name": null,
+          "agent_steps_count": 0,
+          "pending_confirmation": false
+        }
+      }
+    ]
+  },
+  {
+    "id": "tool_web_search",
+    "description": "Search keyword routes to web_search tool",
+    "message": "search for python news",
+    "expect": {
+      "route_kind": "answer",
+      "tool_name": "web_search",
+      "agent_steps_count": 1,
+      "pending_clarification": false,
+      "pending_confirmation": false
+    }
+  },
+  {
+    "id": "clarify_search_no_query",
+    "description": "Search without query triggers clarification",
+    "message": "search",
+    "expect": {
+      "route_kind": "clarify",
+      "tool_name": null,
+      "pending_clarification": true,
+      "pending_confirmation": false
+    }
+  },
+  {
+    "id": "tool_fetch_url",
+    "description": "Message containing a URL routes to fetch_page",
+    "message": "https://example.com",
+    "expect": {
+      "route_kind": "answer",
+      "tool_name": "fetch_page",
+      "agent_steps_count": 1,
+      "pending_clarification": false,
+      "pending_confirmation": false
+    }
+  },
+  {
+    "id": "answer_unknown_fallback",
+    "description": "Unrecognised message routes to a fallback answer",
+    "message": "xyzzy frobnicate the quux",
+    "expect": {
+      "route_kind": "answer",
+      "tool_name": null,
+      "pending_clarification": false,
+      "pending_confirmation": false
+    }
+  },
+  {
+    "id": "session_continuity",
+    "description": "Second turn in the same session sees prior context",
+    "chain": [
+      {
+        "message": "list workspace files",
+        "expect": { "route_kind": "answer" }
+      },
+      {
+        "message": "list workspace files",
+        "expect": { "route_kind": "answer", "tool_name": "list_workspace" }
+      }
+    ]
+  }
+]

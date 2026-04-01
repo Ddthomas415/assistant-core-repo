@@ -7,6 +7,43 @@ name = "assistant-core-repo"
 version = "0.1.0"
 description = "Assistant core contract baseline"
 requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.29.0",
+    "pydantic>=2.0.0",
+    "requests>=2.31.0",
+    "beautifulsoup4>=4.12.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "httpx>=0.27.0",
+]
+voice = [
+    "SpeechRecognition>=3.10.0",
+    "pyaudio>=0.2.14",
+]
+vision = [
+    "Pillow>=10.0.0",
+]
+semantic = [
+    "sentence-transformers>=2.7.0",
+]
+mcp = [
+    "mcp>=1.0.0",
+]
+system = [
+    "psutil>=5.9.0",
+]
+all = [
+    "SpeechRecognition>=3.10.0",
+    "pyaudio>=0.2.14",
+    "Pillow>=10.0.0",
+    "sentence-transformers>=2.7.0",
+    "mcp>=1.0.0",
+    "psutil>=5.9.0",
+]
 
 [project.scripts]
 assistant-core = "assistant.cli:main"
@@ -18,5 +55,5 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = [".", "src"]
 testpaths = ["tests"]

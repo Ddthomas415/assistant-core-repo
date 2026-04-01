@@ -1,0 +1,24 @@
+services:
+  assistant:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./workspace:/app/workspace
+      - ./assistant_sessions:/app/.assistant_sessions
+      - ./assistant_memory:/app/.assistant_memory
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ASSISTANT_API_KEY=${ASSISTANT_API_KEY:-}
+      - ALLOWED_ORIGIN=${ALLOWED_ORIGIN:-*}
+      - PLANNER_MODE=${PLANNER_MODE:-}
+      - AGENT_MAX_STEPS=${AGENT_MAX_STEPS:-10}
+      - RATE_LIMIT_RPM=${RATE_LIMIT_RPM:-60}
+      - CODE_EXEC_TIMEOUT=${CODE_EXEC_TIMEOUT:-15}
+      - WAKE_WORD=${WAKE_WORD:-jarvis}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
